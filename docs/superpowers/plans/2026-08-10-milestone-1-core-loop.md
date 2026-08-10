@@ -1332,10 +1332,15 @@ xcodebuild -project NotchVoice.xcodeproj -scheme NotchVoice -configuration Debug
 open ~/Library/Developer/Xcode/DerivedData/NotchVoice-*/Build/Products/Debug/NotchVoice.app
 ```
 
-macOS will prompt for microphone access — grant it. Talk for the 3 seconds. Then check the log:
+macOS will prompt for microphone access — grant it. Talk for the 3 seconds.
+
+Run the binary **directly** rather than via `open`, so `NSLog` goes to stderr in
+the terminal. Do NOT use `log show`: it redacts NSLog arguments coming from
+another process, so every one of our lines reads as `(Foundation) <private>`,
+which looks identical to the app printing nothing at all.
 
 ```bash
-log show --predicate 'process == "NotchVoice"' --last 1m --info | grep NotchVoice
+"$(ls -d ~/Library/Developer/Xcode/DerivedData/NotchVoice-*/Build/Products/Debug/NotchVoice.app)/Contents/MacOS/NotchVoice"
 ```
 
 Expected: level lines that are near zero in silence and clearly higher while you speak, then `captured ~48000 samples (3.00s at 16kHz)`. If the sample count is wildly off 48000, the converter ratio is wrong.
@@ -1469,8 +1474,11 @@ Task { @MainActor in
 
 Build, launch, and say a clear sentence during the 5 second window. First launch downloads ~630MB, so allow several minutes before the "model ready" line.
 
+Run the binary directly so `NSLog` reaches stderr uncensored — `log show`
+redacts NSLog arguments from other processes and will show `<private>`.
+
 ```bash
-log show --predicate 'process == "NotchVoice"' --last 10m --info | grep NotchVoice
+"$(ls -d ~/Library/Developer/Xcode/DerivedData/NotchVoice-*/Build/Products/Debug/NotchVoice.app)/Contents/MacOS/NotchVoice"
 ```
 
 Expected: `model ready`, then a `transcript:` line matching roughly what you said.

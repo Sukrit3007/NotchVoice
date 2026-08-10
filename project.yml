@@ -32,13 +32,12 @@ targets:
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_VERSION: "6.0"
-        # TEMPORARY: ad-hoc signing. Must become a real Apple Development identity
-        # before Task 6 — TCC grants (Microphone, Accessibility, Input Monitoring)
-        # are keyed to the signing identity, and ad-hoc signing changes it on every
-        # rebuild, silently revoking them.
-        CODE_SIGN_STYLE: Manual
-        CODE_SIGN_IDENTITY: "-"
-        DEVELOPMENT_TEAM: ""
+        # Signing must stay stable across rebuilds: TCC grants (Microphone,
+        # Accessibility, Input Monitoring) are keyed to the signing identity,
+        # and ad-hoc signing changes it every build, silently revoking them.
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "Apple Development"
+        DEVELOPMENT_TEAM: CZ25Y34MGF
         ENABLE_HARDENED_RUNTIME: YES
         INFOPLIST_FILE: App/Info.plist
         CODE_SIGN_ENTITLEMENTS: App/NotchVoice.entitlements

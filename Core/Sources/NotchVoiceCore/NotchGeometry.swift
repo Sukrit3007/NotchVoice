@@ -54,10 +54,14 @@ public enum NotchGeometry {
     }
 
     /// Notch rect in screen coordinates, origin bottom-left as AppKit expects.
+    ///
+    /// The x origin is the left auxiliary area's width — that's the cutout's
+    /// actual left edge, not an assumed centre. The cutout is not guaranteed
+    /// to be centred in the frame.
     public static func notchRect(for metrics: ScreenMetrics) -> CGRect? {
         guard let size = notchSize(for: metrics) else { return nil }
         return CGRect(
-            x: metrics.originX + (metrics.frameWidth - size.width) / 2,
+            x: metrics.originX + metrics.auxiliaryLeftWidth,
             y: metrics.originY + metrics.frameHeight - size.height,
             width: size.width,
             height: size.height

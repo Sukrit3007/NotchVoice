@@ -71,4 +71,17 @@ struct NotchGeometryTests {
     func externalMonitorHasNoRect() {
         #expect(NotchGeometry.notchRect(for: externalMonitor) == nil)
     }
+
+    @Test("the notch rect uses the left auxiliary edge, not the frame centre")
+    func notchRectUsesLeftAuxiliaryEdgeNotCentre() {
+        // Asymmetric auxiliary areas: centring logic would return x = 764 here.
+        let metrics = ScreenMetrics(
+            frameWidth: 1728, frameHeight: 1117,
+            originX: 0, originY: 0,
+            safeAreaTop: 32,
+            auxiliaryLeftWidth: 700, auxiliaryRightWidth: 828
+        )
+        let rect = NotchGeometry.notchRect(for: metrics)
+        #expect(rect == CGRect(x: 700, y: 1085, width: 200, height: 32))
+    }
 }

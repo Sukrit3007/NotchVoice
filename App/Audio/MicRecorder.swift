@@ -1,5 +1,6 @@
 import AVFoundation
 import NotchVoiceCore
+import Synchronization
 
 enum MicRecorderError: Error {
     case engineFailed(String)
@@ -24,12 +25,24 @@ final class MicRecorder {
 
     private let engine = AVAudioEngine()
     private var converter: AVAudioConverter?
-    private var samples: [Float] = []
+
+    /// Samples are accumulated under a lock, straight from the audio thread,
+    /// rather than hopped onto the main actor with `Task { @MainActor in … }`.
+    /// The hop clipped the tail off every take: `stop()` is synchronous, so it
+    /// never suspends, and any append still queued on the main actor could not
+    /// have run yet. Measured: 2-3 buffers (100-150 ms of speech) lost with the
+    /// main actor merely busy at 60fps, and the entire take lost when it was
+    /// blocked. The stranded appends then landed *after* `stop()` cleared the
+    /// array and turned into the head of the next recording. Keep this on the
+    /// lock; do not route it back through the main actor.
+    private nonisolated let store = Mutex<[Float]>([])
+
     private var isRunning = false
     private var startedAt: Date?
 
-    /// Fires with an RMS level in `0...1` roughly 20 times a second.
-    var onLevel: ((Float) -> Void)?
+    /// Fires with an RMS level in `0...1` roughly 20 times a second. Read once
+    /// when `start()` installs the tap, so set it before starting.
+    var onLevel: (@Sendable (Float) -> Void)?
 
     var duration: TimeInterval {
         guard let startedAt else { return 0 }
@@ -38,7 +51,7 @@ final class MicRecorder {
 
     func start() throws {
         guard !isRunning else { return }
-        samples.removeAll(keepingCapacity: true)
+        store.withLock { $0.removeAll(keepingCapacity: true) }
 
         let input = engine.inputNode
         let hardwareFormat = input.outputFormat(forBus: 0)
@@ -62,15 +75,22 @@ final class MicRecorder {
             hardwareFormat.sampleRate / Self.levelsPerSecond
         )
 
+        // Grabbed here so the audio thread never reaches for main-actor state.
+        let onLevel = self.onLevel
+
         input.installTap(onBus: 0, bufferSize: tapFrames, format: hardwareFormat) {
             [weak self] buffer, _ in
             guard let self else { return }
             let converted = Self.convert(buffer, using: converter, to: targetFormat)
             guard !converted.isEmpty else { return }
+            self.store.withLock { $0.append(contentsOf: converted) }
+
+            // The level is only a waveform bar, so it can afford the hop —
+            // a late or dropped bar costs nothing, a late sample costs audio.
+            guard let onLevel else { return }
             let level = LevelBuffer.rms(converted)
             Task { @MainActor in
-                self.samples.append(contentsOf: converted)
-                self.onLevel?(min(level * 4, 1))  // ×4 so speech fills the bars
+                onLevel(min(level * 4, 1))  // ×4 so speech fills the bars
             }
         }
 
@@ -89,15 +109,17 @@ final class MicRecorder {
     /// Stops capture and hands back everything recorded.
     func stop() -> [Float] {
         teardown()
-        let captured = samples
-        samples.removeAll(keepingCapacity: false)
-        return captured
+        return store.withLock { captured in
+            let samples = captured
+            captured.removeAll(keepingCapacity: false)
+            return samples
+        }
     }
 
     /// Stops capture and throws the audio away.
     func discard() {
         teardown()
-        samples.removeAll(keepingCapacity: false)
+        store.withLock { $0.removeAll(keepingCapacity: false) }
     }
 
     private func teardown() {

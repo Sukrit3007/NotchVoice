@@ -54,6 +54,8 @@ public struct RecordingStateMachine: Sendable {
         case stopAndTranscribe
         /// Throw the audio away. No transcription, no paste.
         case discard
+        /// Discard any in-progress capture, then start a fresh one.
+        case restartCapture
     }
 
     public private(set) var state: State = .idle
@@ -100,10 +102,11 @@ public struct RecordingStateMachine: Sendable {
                 state = .locked
                 return .enterLocked
             }
-            // Too late to be a double tap. The first tap's audio is stale,
-            // so this is a fresh hold rather than a continuation.
+            // Too late to be a double tap. The first tap's capture is still
+            // running and its audio is stale, so drop it and start fresh
+            // rather than continuing it or leaving it running underneath.
             state = .holding(downAt: t)
-            return .startCapture
+            return .restartCapture
 
         case (.awaitingSecondTap, .doubleTapWindowExpired),
              (.awaitingSecondTap, .otherKeyPressed),
@@ -112,8 +115,10 @@ public struct RecordingStateMachine: Sendable {
             return .discard
 
         case (.awaitingSecondTap, .maxDurationReached):
+            // Same intent as an abandoned tap timing out: discard, don't
+            // paste a fragment just because a different timer won the race.
             state = .idle
-            return .stopAndTranscribe
+            return .discard
 
         case (.awaitingSecondTap, .keyUp):
             return .none

@@ -50,7 +50,7 @@ struct RecordingStateMachineTests {
         var sm = RecordingStateMachine()
         _ = sm.handle(.keyDown(at: 0))
         _ = sm.handle(.keyUp(at: 0.1))
-        #expect(sm.handle(.keyDown(at: 5.0)) == .startCapture)
+        #expect(sm.handle(.keyDown(at: 5.0)) == .restartCapture)
         #expect(sm.state == .holding(downAt: 5.0))
     }
 
@@ -128,6 +128,25 @@ struct RecordingStateMachineTests {
         #expect(sm.state == .idle)
     }
 
+    @Test("hitting the duration cap while awaiting a second tap discards")
+    func maxDurationWhileAwaitingSecondTapDiscards() {
+        var sm = RecordingStateMachine()
+        _ = sm.handle(.keyDown(at: 0))
+        _ = sm.handle(.keyUp(at: 0.1))
+        #expect(sm.handle(.maxDurationReached) == .discard)
+        #expect(sm.state == .idle)
+    }
+
+    @Test("the double-tap timer expiring after the lock is ignored")
+    func doubleTapWindowExpiredWhileLockedIsIgnored() {
+        var sm = RecordingStateMachine()
+        _ = sm.handle(.keyDown(at: 0))
+        _ = sm.handle(.keyUp(at: 0.1))
+        _ = sm.handle(.keyDown(at: 0.3))
+        #expect(sm.handle(.doubleTapWindowExpired) == .none)
+        #expect(sm.state == .locked)
+    }
+
     @Test("events arriving in the idle state are ignored")
     func idleIgnoresStrayEvents() {
         var sm = RecordingStateMachine()
@@ -135,6 +154,7 @@ struct RecordingStateMachineTests {
         #expect(sm.handle(.otherKeyPressed) == .none)
         #expect(sm.handle(.escapePressed) == .none)
         #expect(sm.handle(.doubleTapWindowExpired) == .none)
+        #expect(sm.handle(.maxDurationReached) == .none)
         #expect(sm.state == .idle)
     }
 
@@ -146,5 +166,10 @@ struct RecordingStateMachineTests {
         _ = sm.handle(.keyDown(at: 0))
         // 0.5s is a long hold by default, but a short tap at this threshold
         #expect(sm.handle(.keyUp(at: 0.5)) == .armDoubleTapTimer)
+        #expect(sm.state == .awaitingSecondTap(firstUpAt: 0.5))
+
+        // A second tap within the custom (shorter) 0.1s window locks.
+        #expect(sm.handle(.keyDown(at: 0.55)) == .enterLocked)
+        #expect(sm.state == .locked)
     }
 }

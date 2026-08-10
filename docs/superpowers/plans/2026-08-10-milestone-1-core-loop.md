@@ -318,7 +318,7 @@ The fiddliest logic in the app, and the only part where a subtle bug produces st
 - Produces:
   - `RecordingStateMachine.State` — `.idle`, `.holding(downAt: TimeInterval)`, `.awaitingSecondTap(firstUpAt: TimeInterval)`, `.locked`
   - `RecordingStateMachine.Event` — `.keyDown(at:)`, `.keyUp(at:)`, `.otherKeyPressed`, `.escapePressed`, `.doubleTapWindowExpired`, `.maxDurationReached`
-  - `RecordingStateMachine.Effect` — `.none`, `.startCapture`, `.armDoubleTapTimer`, `.enterLocked`, `.stopAndTranscribe`, `.discard`
+  - `RecordingStateMachine.Effect` — `.none`, `.startCapture`, `.restartCapture`, `.armDoubleTapTimer`, `.enterLocked`, `.stopAndTranscribe`, `.discard`
   - `mutating func handle(_ event: Event) -> Effect`
   - `var state: State { get }`
 
@@ -2062,6 +2062,14 @@ final class DictationCoordinator: ObservableObject {
             break
 
         case .startCapture:
+            beginCapture()
+
+        case .restartCapture:
+            // A second tap arrived too late to lock, so the first tap's audio
+            // is stale. Drop it before starting over — MicRecorder.start()
+            // no-ops while already running, so without this the stale samples
+            // would be prepended to the new dictation and pasted.
+            recorder.discard()
             beginCapture()
 
         case .armDoubleTapTimer:

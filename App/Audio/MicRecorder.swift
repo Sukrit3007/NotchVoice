@@ -42,7 +42,11 @@ final class MicRecorder {
 
     /// Fires with an RMS level in `0...1` roughly 20 times a second. Read once
     /// when `start()` installs the tap, so set it before starting.
-    var onLevel: (@Sendable (Float) -> Void)?
+    ///
+    /// Main-actor isolated because every caller drives UI with it — the
+    /// waveform's sample buffer lives on the main actor, and a plain `@Sendable`
+    /// closure could not touch it.
+    var onLevel: (@MainActor @Sendable (Float) -> Void)?
 
     var duration: TimeInterval {
         guard let startedAt else { return 0 }

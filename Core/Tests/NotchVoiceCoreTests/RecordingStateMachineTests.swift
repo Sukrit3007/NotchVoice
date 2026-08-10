@@ -168,8 +168,28 @@ struct RecordingStateMachineTests {
         #expect(sm.handle(.keyUp(at: 0.5)) == .armDoubleTapTimer)
         #expect(sm.state == .awaitingSecondTap(firstUpAt: 0.5))
 
-        // A second tap within the custom (shorter) 0.1s window locks.
-        #expect(sm.handle(.keyDown(at: 0.55)) == .enterLocked)
-        #expect(sm.state == .locked)
+        // 0.2s after release: outside the custom 0.1s window, but inside the
+        // default 0.3s window. This assertion can only pass if the custom
+        // doubleTap value is actually in effect rather than the default.
+        #expect(sm.handle(.keyDown(at: 0.7)) == .restartCapture)
+        #expect(sm.state == .holding(downAt: 0.7))
+    }
+
+    @Test("holding exactly at the threshold transcribes")
+    func holdAtExactThresholdTranscribes() {
+        var sm = RecordingStateMachine()
+        _ = sm.handle(.keyDown(at: 0))
+        // 0.4 - 0 is exact in floating point, so this pins the >= boundary.
+        #expect(sm.handle(.keyUp(at: 0.4)) == .stopAndTranscribe)
+        #expect(sm.state == .idle)
+    }
+
+    @Test("key-down auto-repeat while holding does not reset the hold")
+    func keyDownAutoRepeatWhileHoldingIsIgnored() {
+        var sm = RecordingStateMachine()
+        _ = sm.handle(.keyDown(at: 0))
+        #expect(sm.handle(.keyDown(at: 0.05)) == .none)
+        // The original downAt must survive, not the repeat's timestamp.
+        #expect(sm.state == .holding(downAt: 0))
     }
 }

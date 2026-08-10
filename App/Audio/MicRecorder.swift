@@ -82,21 +82,17 @@ final class MicRecorder {
         // Grabbed here so the audio thread never reaches for main-actor state.
         let onLevel = self.onLevel
 
-        input.installTap(onBus: 0, bufferSize: tapFrames, format: hardwareFormat) {
-            [weak self] buffer, _ in
-            guard let self else { return }
-            let converted = Self.convert(buffer, using: converter, to: targetFormat)
-            guard !converted.isEmpty else { return }
-            self.store.withLock { $0.append(contentsOf: converted) }
-
-            // The level is only a waveform bar, so it can afford the hop —
-            // a late or dropped bar costs nothing, a late sample costs audio.
-            guard let onLevel else { return }
-            let level = LevelBuffer.rms(converted)
-            Task { @MainActor in
-                onLevel(min(level * 4, 1))  // ×4 so speech fills the bars
-            }
-        }
+        input.installTap(
+            onBus: 0,
+            bufferSize: tapFrames,
+            format: hardwareFormat,
+            block: Self.makeTap(
+                for: self,
+                converter: converter,
+                targetFormat: targetFormat,
+                onLevel: onLevel
+            )
+        )
 
         engine.prepare()
         do {
@@ -135,7 +131,37 @@ final class MicRecorder {
         startedAt = nil
     }
 
-    private static func convert(
+    /// Builds the tap block from a `nonisolated` context so the closure inherits
+    /// nonisolated too. Written inline in `start()`, the closure inherited this
+    /// class's `@MainActor` isolation, and Swift emitted a dynamic isolation
+    /// check at its entry — CoreAudio then called it on the audio thread and
+    /// `dispatch_assert_queue(main)` aborted the process on the first buffer.
+    /// `@Sendable` does not help: `@MainActor @Sendable` is a valid pair.
+    /// Keeping the block nonisolated also means the compiler now rejects any
+    /// main-actor access from the tap instead of letting it crash on device.
+    private nonisolated static func makeTap(
+        for recorder: MicRecorder,
+        converter: AVAudioConverter,
+        targetFormat: AVAudioFormat,
+        onLevel: (@MainActor @Sendable (Float) -> Void)?
+    ) -> AVAudioNodeTapBlock {
+        return { [weak recorder] buffer, _ in
+            guard let recorder else { return }
+            let converted = convert(buffer, using: converter, to: targetFormat)
+            guard !converted.isEmpty else { return }
+            recorder.store.withLock { $0.append(contentsOf: converted) }
+
+            // The level is only a waveform bar, so it can afford the hop —
+            // a late or dropped bar costs nothing, a late sample costs audio.
+            guard let onLevel else { return }
+            let level = LevelBuffer.rms(converted)
+            Task { @MainActor in
+                onLevel(min(level * 4, 1))  // ×4 so speech fills the bars
+            }
+        }
+    }
+
+    private nonisolated static func convert(
         _ buffer: AVAudioPCMBuffer,
         using converter: AVAudioConverter,
         to format: AVAudioFormat

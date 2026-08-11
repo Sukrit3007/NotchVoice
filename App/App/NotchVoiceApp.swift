@@ -28,6 +28,35 @@ final class NotchVoiceApp: NSObject, NSApplicationDelegate {
             }
             coordinator.start()
             self.coordinator = coordinator
+
+            Self.printManualChecklist()
         }
+    }
+
+    /// TEMPORARY (Task 10 harness): replaces the Task 9 tap harness. There is
+    /// no UI yet, so the phase log is the only way to see the loop run. Revert
+    /// once a human has worked through the checks below.
+    @MainActor
+    private static func printManualChecklist() {
+        let binding = BindingStore.binding.displayName
+        NSLog("[NotchVoice] --- manual checks (wait for 'model ready' first) ---")
+        NSLog("[NotchVoice] Click into TextEdit, then:")
+        NSLog("[NotchVoice]  1. hold %@, say \"hello world\", release", binding)
+        NSLog("[NotchVoice]     -> recording, transcribing, done; text appears")
+        NSLog("[NotchVoice]  2. double-tap %@, talk, tap again", binding)
+        NSLog("[NotchVoice]     -> locked, transcribing, done; text appears")
+        NSLog("[NotchVoice]  3. tap %@ once, wait", binding)
+        NSLog("[NotchVoice]     -> recording, dormant; nothing pasted")
+        NSLog("[NotchVoice]  4. hold %@, press o, release", binding)
+        NSLog("[NotchVoice]     -> recording, dormant; nothing pasted; o-slash typed")
+        NSLog("[NotchVoice]  5. hold %@, say nothing, release quickly", binding)
+        NSLog("[NotchVoice]     -> tooShort, dormant")
+        NSLog("[NotchVoice]  6. hold %@, say nothing, release after ~2s", binding)
+        NSLog("[NotchVoice]     -> error(Nothing heard); a bare \".\" must NOT be pasted")
+        NSLog("[NotchVoice]  7. hold %@, talk, press Esc", binding)
+        NSLog("[NotchVoice]     -> dormant; nothing pasted")
+        NSLog("[NotchVoice]  8. echo SENTINEL | pbcopy, dictate, then pbpaste")
+        NSLog("[NotchVoice]     -> still prints SENTINEL")
+        NSLog("[NotchVoice] --- end checks ---")
     }
 }

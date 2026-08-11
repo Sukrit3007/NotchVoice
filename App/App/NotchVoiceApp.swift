@@ -13,32 +13,40 @@ final class NotchVoiceApp: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSLog("[NotchVoice] launched")
 
-        // TEMPORARY: manual verification harness for WhisperKitService (Task 7).
-        // Revert this block after a human confirms transcription on real hardware.
+        // TEMPORARY: manual verification harness for paste delivery (Task 8).
+        // Revert this block after a human confirms pasting into real apps.
         Task { @MainActor in
-            // Errors are caught and logged rather than left to propagate: an
-            // unhandled throw out of a Task is discarded silently, so a failed
-            // transcription would look exactly like a hang — and silence throws
-            // TranscriptionError.empty by design.
-            do {
-                let service = WhisperKitService()
-                NSLog("[NotchVoice] preparing model…")
-                try await service.prepare { NSLog("[NotchVoice] prepare progress %.2f", $0) }
-                NSLog("[NotchVoice] model ready")
+            // Nothing on this path throws — Paster.deliver swallows its own
+            // failures and reports them through PasteOutcome — so there is no
+            // do/catch here. Every step still logs, because the failure mode
+            // that matters (a silent no-op) looks exactly like a hang.
+            NSLog("[NotchVoice] accessibility trusted: %@",
+                  Paster.isAccessibilityTrusted() ? "YES" : "NO")
+            NSLog("[NotchVoice] switch to your target app now (5s)…")
+            try? await Task.sleep(for: .seconds(5))
 
-                // MicRecorder is @MainActor-isolated and this Task runs on the
-                // main actor, so these calls need no hopping.
-                let recorder = MicRecorder()
-                try recorder.start()
-                NSLog("[NotchVoice] recording — speak now (5s)")
-                try await Task.sleep(for: .seconds(5))
-                let samples = recorder.stop()
-                NSLog("[NotchVoice] captured %d samples, transcribing…", samples.count)
+            let clipboardBefore = NSPasteboard.general.string(forType: .string)
+            let focus = FocusSnapshot.capture()
+            NSLog("[NotchVoice] target: %@ (pid %d)",
+                  focus?.bundleID ?? "none", focus?.pid ?? -1)
+            NSLog("[NotchVoice] clipboard before: %@", clipboardBefore ?? "<empty>")
 
-                let text = try await service.transcribe(samples)
-                NSLog("[NotchVoice] transcript: %@", text)
-            } catch {
-                NSLog("[NotchVoice] FAILED: %@", String(describing: error))
+            let outcome = await Paster.deliver("hello from notchvoice", to: focus)
+            NSLog("[NotchVoice] outcome: %@", String(describing: outcome))
+
+            let clipboardAfter = NSPasteboard.general.string(forType: .string)
+            NSLog("[NotchVoice] clipboard after: %@", clipboardAfter ?? "<empty>")
+
+            // What counts as correct depends on the outcome, so spell it out
+            // rather than printing a bare restored YES/NO that reads as a bug
+            // on the copiedOnly path.
+            switch outcome {
+            case .pasted:
+                NSLog("[NotchVoice] expected clipboard to be RESTORED — %@",
+                      clipboardBefore == clipboardAfter ? "OK" : "WRONG, clipboard was eaten")
+            case .copiedOnly:
+                NSLog("[NotchVoice] expected clipboard to HOLD THE TRANSCRIPT — %@",
+                      clipboardAfter == "hello from notchvoice" ? "OK" : "WRONG")
             }
         }
     }

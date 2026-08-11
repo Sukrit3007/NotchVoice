@@ -6,6 +6,7 @@ final class NotchVoiceApp: NSObject, NSApplicationDelegate {
     /// The coordinator owns the event tap, the recorder and the model. An
     /// unretained one deinits immediately and silently stops delivering events.
     @MainActor private var coordinator: DictationCoordinator?
+    @MainActor private var island: IslandWindowController?
 
     static func main() {
         let app = NSApplication.shared
@@ -23,11 +24,24 @@ final class NotchVoiceApp: NSObject, NSApplicationDelegate {
         // is up with no tap armed.
         MainActor.assumeIsolated {
             let coordinator = DictationCoordinator()
-            coordinator.onPhaseChange = { phase in
+            let island = IslandWindowController(coordinator: coordinator)
+
+            // `weak island` breaks a cycle that would otherwise be
+            // coordinator -> closure -> island -> coordinator. Both objects
+            // live for the whole process here, so it would never be observed,
+            // which is exactly why it would survive into a version where it is.
+            coordinator.onPhaseChange = { [weak island] phase in
                 NSLog("[NotchVoice] phase: %@", String(describing: phase))
+                if phase == .recording {
+                    island?.moveToActiveScreen()
+                }
             }
+
             coordinator.start()
+            island.show()
+
             self.coordinator = coordinator
+            self.island = island
 
             Self.printManualChecklist()
         }

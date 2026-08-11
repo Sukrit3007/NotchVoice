@@ -53,10 +53,19 @@ final class IslandWindowController {
             height: Self.stripHeight
         )
 
+        let metrics = screen.metrics
+        // Derived from NotchGeometry.notchRect rather than assumed to be zero:
+        // that function takes the cutout's left edge from the auxiliary area
+        // instead of the frame centre, which is the whole point of the task 5
+        // fix. Reading midX back out keeps the view honest about the same rule.
+        let notchOffset = NotchGeometry.notchRect(for: metrics)
+            .map { $0.midX - screen.frame.midX } ?? 0
+
         let window = IslandWindow(contentRect: frame)
         let root = IslandView(
             coordinator: coordinator,
-            notchSize: NotchGeometry.notchSize(for: screen.metrics)
+            notchSize: NotchGeometry.notchSize(for: metrics),
+            notchCenterOffset: notchOffset
         )
         window.contentView = NSHostingView(rootView: root)
         window.setFrame(frame, display: true)

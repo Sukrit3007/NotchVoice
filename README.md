@@ -11,7 +11,17 @@ Everything runs locally. No network calls at runtime.
 
 ## Status
 
-Design complete, implementation not started. See
+Core dictation loop built and awaiting hardware acceptance. Hold right-Option,
+speak, release.
+
+Every automated check passes — 39 unit tests, clean Release build, and the
+runtime pieces that can be measured from outside the process (window placement,
+permission state, model load, notch geometry). The acceptance matrix in the
+milestone plan has not been run yet: nothing here has been driven by a human
+speaking into a microphone. `v0.1.0` is tagged when it has.
+
+Next: transcript cleanup via Foundation Models (0.2.0), custom vocabulary bias
+(0.3.0), transcript history (0.4.0). See
 [`docs/superpowers/specs/2026-08-06-notch-dictation-design.md`](docs/superpowers/specs/2026-08-06-notch-dictation-design.md).
 
 ## Stack

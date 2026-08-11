@@ -18,7 +18,15 @@ final class DictationCoordinator: ObservableObject {
     }
 
     /// Below this, there is not enough audio to transcribe usefully.
-    private static let minimumDuration: TimeInterval = 0.5
+    ///
+    /// Tied to the hold threshold rather than set independently. As two free
+    /// literals — hold 0.4, minimum 0.5 — every press lasting between them was
+    /// accepted by the state machine as a deliberate push-to-talk and then
+    /// binned by this guard, so a quick but intentional press recorded, showed
+    /// "Too short" for 900ms, and pasted nothing. Observed in practice: a real
+    /// press measured 0.427s and vanished. The machine decides what counts as
+    /// a hold; anything it accepts must be long enough to transcribe.
+    private static var minimumDuration: TimeInterval { thresholds.hold }
     /// Locked sessions would otherwise run unbounded. Spec §5.
     private static let maximumDuration: TimeInterval = 300
     /// How many bars the waveform shows.

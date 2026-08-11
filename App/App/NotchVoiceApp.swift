@@ -2,6 +2,11 @@ import AppKit
 
 @main
 final class NotchVoiceApp: NSObject, NSApplicationDelegate {
+
+    /// TEMPORARY (Task 9 harness): the tap must be held strongly, otherwise it
+    /// deinits immediately and tears its own event tap down.
+    @MainActor private var debugTap: ModifierTap?
+
     static func main() {
         let app = NSApplication.shared
         let delegate = NotchVoiceApp()
@@ -13,41 +18,49 @@ final class NotchVoiceApp: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSLog("[NotchVoice] launched")
 
-        // TEMPORARY: manual verification harness for paste delivery (Task 8).
-        // Revert this block after a human confirms pasting into real apps.
+        // TEMPORARY: manual verification harness for the modifier tap (Task 9).
+        // Replaces the Task 8 paste harness. Revert once a human has confirmed
+        // the checks below. Every step logs, because the failure mode that
+        // matters (a silent no-op) looks exactly like a hang.
         Task { @MainActor in
-            // Nothing on this path throws — Paster.deliver swallows its own
-            // failures and reports them through PasteOutcome — so there is no
-            // do/catch here. Every step still logs, because the failure mode
-            // that matters (a silent no-op) looks exactly like a hang.
-            NSLog("[NotchVoice] accessibility trusted: %@",
-                  Paster.isAccessibilityTrusted() ? "YES" : "NO")
-            NSLog("[NotchVoice] switch to your target app now (5s)…")
-            try? await Task.sleep(for: .seconds(5))
+            let binding = BindingStore.binding
+            NSLog("[NotchVoice] binding: %@ (keycode %d)",
+                  binding.displayName, Int(binding.rawValue))
 
-            let clipboardBefore = NSPasteboard.general.string(forType: .string)
-            let focus = FocusSnapshot.capture()
-            NSLog("[NotchVoice] target: %@ (pid %d)",
-                  focus?.bundleID ?? "none", focus?.pid ?? -1)
-            NSLog("[NotchVoice] clipboard before: %@", clipboardBefore ?? "<empty>")
+            let tap = ModifierTap(binding: binding)
+            tap.onKeyDown = { NSLog("[NotchVoice] DOWN") }
+            tap.onKeyUp = { NSLog("[NotchVoice] UP") }
+            tap.onOtherKey = { NSLog("[NotchVoice] OTHER") }
+            tap.onEscape = { NSLog("[NotchVoice] ESC") }
 
-            let outcome = await Paster.deliver("hello from notchvoice", to: focus)
-            NSLog("[NotchVoice] outcome: %@", String(describing: outcome))
+            let started = tap.start()
+            NSLog("[NotchVoice] tap started: %@", started ? "yes" : "no")
 
-            let clipboardAfter = NSPasteboard.general.string(forType: .string)
-            NSLog("[NotchVoice] clipboard after: %@", clipboardAfter ?? "<empty>")
-
-            // What counts as correct depends on the outcome, so spell it out
-            // rather than printing a bare restored YES/NO that reads as a bug
-            // on the copiedOnly path.
-            switch outcome {
-            case .pasted:
-                NSLog("[NotchVoice] expected clipboard to be RESTORED — %@",
-                      clipboardBefore == clipboardAfter ? "OK" : "WRONG, clipboard was eaten")
-            case .copiedOnly:
-                NSLog("[NotchVoice] expected clipboard to HOLD THE TRANSCRIPT — %@",
-                      clipboardAfter == "hello from notchvoice" ? "OK" : "WRONG")
+            guard started else {
+                // Not a crash and not a hang: tapCreate returns nil when Input
+                // Monitoring is not granted, and that is the only way to find
+                // out. Say so explicitly so the empty log is not read as one.
+                NSLog("[NotchVoice] Input Monitoring is NOT granted — no events will arrive.")
+                NSLog("[NotchVoice] Grant it in System Settings > Privacy & Security >")
+                NSLog("[NotchVoice] Input Monitoring, then relaunch this binary.")
+                return
             }
+            self.debugTap = tap
+
+            NSLog("[NotchVoice] tap is live. Expected log for each check:")
+            NSLog("[NotchVoice]   tap %@            -> DOWN then UP", binding.displayName)
+            NSLog("[NotchVoice]   tap the LEFT twin      -> nothing")
+            NSLog("[NotchVoice]   hold %@ + press o -> DOWN then OTHER", binding.displayName)
+            NSLog("[NotchVoice]   press Esc alone        -> ESC")
+            NSLog("[NotchVoice]   type a normal sentence -> nothing")
+            NSLog("[NotchVoice] NOW THE ONE THAT MATTERS — nothing may be swallowed.")
+            NSLog("[NotchVoice] In TextEdit, with this running:")
+            NSLog("[NotchVoice]   type a full sentence -> every character appears")
+            NSLog("[NotchVoice]   press left-opt + o   -> types o-slash")
+            NSLog("[NotchVoice]   press %@ + o    -> types o-slash (binding must still compose)",
+                  binding.displayName)
+            NSLog("[NotchVoice]   press opt + left arrow -> cursor jumps a whole word")
+            NSLog("[NotchVoice] Any missing keystroke means the tap is not observe-only.")
         }
     }
 }

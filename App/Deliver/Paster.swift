@@ -63,9 +63,12 @@ enum Paster {
         let pasted = sendCommandV()
         try? await Task.sleep(for: pasteConsumeDelay)
 
-        // Restore is attempted whether or not the paste succeeded, so a failed
-        // CGEventPost never leaves the clipboard stuck holding the transcript.
-        if ClipboardGuard.shouldRestore(
+        // Restore ONLY when ⌘V actually went out. If posting failed we return
+        // .copiedOnly, and that return value promises the caller the transcript
+        // is sitting on the clipboard for the user to paste by hand — restoring
+        // here would quietly wipe the dictation and report success at the same
+        // time, which is the worst of both.
+        if pasted, ClipboardGuard.shouldRestore(
             changeCountAfterWrite: changeCountAfterWrite,
             currentChangeCount: NSPasteboard.general.changeCount
         ) {

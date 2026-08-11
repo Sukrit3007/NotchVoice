@@ -205,8 +205,19 @@ final class DictationCoordinator: ObservableObject {
         let duration = recorder.duration
         let samples = recorder.stop()
         resetWaveform()
-        NSLog("[NotchVoice] captured %.2fs, %d samples (%.2fs of audio)",
-              duration, samples.count, Double(samples.count) / 16_000)
+
+        // Peak and RMS are logged alongside the sample count because "Nothing
+        // heard" has two completely different causes that look identical from
+        // outside: the user did not speak, or the microphone captured silence
+        // while they did. A peak near zero means no signal ever arrived and
+        // the problem is the input device or its volume, not the model.
+        let peak = samples.reduce(0 as Float) { max($0, abs($1)) }
+        let rms = LevelBuffer.rms(samples)
+        NSLog("[NotchVoice] captured %.2fs, %d samples (%.2fs of audio), peak %.4f rms %.4f",
+              duration, samples.count, Double(samples.count) / 16_000, peak, rms)
+        if peak < 0.01 {
+            NSLog("[NotchVoice] audio is effectively SILENT — check the input device and its volume")
+        }
 
         guard duration >= Self.minimumDuration else {
             setPhase(.tooShort)

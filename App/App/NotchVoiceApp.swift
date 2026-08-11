@@ -7,6 +7,7 @@ final class NotchVoiceApp: NSObject, NSApplicationDelegate {
     /// unretained one deinits immediately and silently stops delivering events.
     @MainActor private var coordinator: DictationCoordinator?
     @MainActor private var island: IslandWindowController?
+    @MainActor private var menuBar: MenuBarController?
 
     static func main() {
         let app = NSApplication.shared
@@ -37,11 +38,24 @@ final class NotchVoiceApp: NSObject, NSApplicationDelegate {
                 }
             }
 
-            coordinator.start()
+            let menuBar = MenuBarController(coordinator: coordinator)
+            menuBar.install()
             island.show()
+
+            Task {
+                // Prompts on first launch; a no-op once answered. Held ahead
+                // of start() so the very first hold-to-talk is not the thing
+                // that raises the microphone dialog, mid-sentence.
+                let granted = await PermissionChecker.requestMicrophone()
+                if !granted {
+                    NSLog("[NotchVoice] microphone DENIED — capture will fail")
+                }
+                coordinator.start()
+            }
 
             self.coordinator = coordinator
             self.island = island
+            self.menuBar = menuBar
 
             Self.printManualChecklist()
         }

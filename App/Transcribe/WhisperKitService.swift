@@ -25,7 +25,8 @@ actor WhisperKitService {
     ///
     /// Do not read the annotation as "safe": it is unchecked, and what makes
     /// the use safe is the decode gate below. Without that gate two dictations
-    /// really do decode on this one pipeline at once (measured: peak 2).
+    /// can decode on this one pipeline at once (reasoned from actor
+    /// reentrancy, not yet reproduced under load).
     private nonisolated(unsafe) var pipe: WhisperKit?
 
     /// Actor isolation cannot serialise decoding, because actors are reentrant:

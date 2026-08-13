@@ -54,3 +54,29 @@ targets:
         INFOPLIST_FILE: App/Info.plist
         CODE_SIGN_ENTITLEMENTS: App/NotchVoice.entitlements
         MACOSX_DEPLOYMENT_TARGET: "26.0"
+    scheme:
+      testTargets:
+        - NotchVoiceTests
+
+  # Anything that needs AppKit, the app's own types, or the built bundle's
+  # resources. Pure logic belongs in Core, which tests without an app host.
+  NotchVoiceTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: AppTests
+    dependencies:
+      - target: NotchVoice
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.sukrit.notchvoice.tests
+        SWIFT_VERSION: "6.2"
+        MACOSX_DEPLOYMENT_TARGET: "26.0"
+        GENERATE_INFOPLIST_FILE: YES
+        # Hosted in the app so `Bundle.main` is the real bundle and the cue
+        # assets can be asserted against what actually ships. The app skips
+        # starting its pipeline when it detects it is hosting tests.
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Notch Voice.app/Contents/MacOS/Notch Voice"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: CZ25Y34MGF

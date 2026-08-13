@@ -18,7 +18,22 @@ final class NotchVoiceApp: NSObject, NSApplicationDelegate {
         app.run()
     }
 
+    /// True when this process was launched only to host a test bundle.
+    ///
+    /// Load-bearing. Unit tests are injected into the running app rather than
+    /// run standalone, so without this every `xcodebuild test` would arm a
+    /// **consuming** event tap — swallowing fn across the whole machine for the
+    /// duration — and kick off a 632MB model download.
+    private static var isHostingTests: Bool {
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        guard !Self.isHostingTests else {
+            Log.dictation.info("Hosting tests — pipeline not started")
+            return
+        }
+
         Log.dictation.info("Launched")
 
         // Synchronous, not `Task { @MainActor in … }`: this method already runs

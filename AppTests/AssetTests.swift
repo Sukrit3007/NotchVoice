@@ -1,0 +1,37 @@
+import Testing
+import AVFoundation
+import AppKit
+@testable import NotchVoice
+
+/// The app loads its cues by filename at runtime and logs an error if one is
+/// missing — which nothing reads until a dictation is silent. These assert the
+/// files that ship are the files the code asks for.
+@MainActor
+@Suite("Cue assets")
+struct CueAssetTests {
+
+    @Test("every cue has a file in the built bundle", arguments: Cues.Cue.allCases)
+    func cueFileExists(_ cue: Cues.Cue) {
+        let url = Bundle.main.url(forResource: cue.fileName, withExtension: "wav")
+        #expect(url != nil, "\(cue.fileName).wav is missing from the app bundle")
+    }
+
+    @Test("every cue actually decodes as audio", arguments: Cues.Cue.allCases)
+    func cueDecodes(_ cue: Cues.Cue) throws {
+        let url = try #require(Bundle.main.url(forResource: cue.fileName, withExtension: "wav"))
+        let player = try AVAudioPlayer(contentsOf: url)
+        // A cue fires on every dictation. Anything long enough to notice as a
+        // sound rather than a tick is one the user turns off.
+        #expect(player.duration > 0.02)
+        #expect(player.duration < 0.40, "\(cue.fileName) runs \(player.duration)s")
+    }
+
+    @Test("cue filenames are ours, not a vendor's")
+    func filenamesAreOriginal() {
+        // The app shipped with Wispr Flow's own files under their own names
+        // ("popo-lock", "dictation-start"). This fails if any of them return.
+        for cue in Cues.Cue.allCases {
+            #expect(cue.fileName.hasPrefix("cue-"), "unexpected cue name: \(cue.fileName)")
+        }
+    }
+}

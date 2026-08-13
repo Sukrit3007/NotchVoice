@@ -76,6 +76,18 @@ Accessibility is required, not optional. A tap that only *observes* events needs
 Input Monitoring alone, but reserving `fn` means **consuming** the keypress, and
 macOS only permits that with Accessibility.
 
+## Tests
+
+| Suite | Runs with | Covers |
+|---|---|---|
+| `Core/Tests` | `cd Core && swift test` | Pure logic — state machine, geometry, clipboard guard, island metrics |
+| `AppTests` | `xcodebuild test -scheme NotchVoice` | Anything needing AppKit or the built bundle — cue assets, failure copy against the wing it has to fit |
+| `Tools/SoundGen/Tests` | `cd Tools/SoundGen && swift test` | The cue synthesiser — click-freedom, envelope, level bounds |
+
+`AppTests` is hosted in the app so `Bundle.main` is the real bundle. The app
+detects it is hosting tests and skips starting its pipeline — otherwise every
+test run would arm a consuming `fn` tap and download the speech model.
+
 ## Versioning
 
 Semantic versioning, tracked with annotated git tags. See [CHANGELOG.md](CHANGELOG.md) and

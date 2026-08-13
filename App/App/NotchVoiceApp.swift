@@ -8,7 +8,7 @@ final class NotchVoiceApp: NSObject, NSApplicationDelegate {
     @MainActor private var coordinator: DictationCoordinator?
     @MainActor private var island: IslandWindowController?
     @MainActor private var menuBar: MenuBarController?
-    @MainActor private var settings: SettingsWindowController?
+    @MainActor private var library: LibraryWindowController?
 
     static func main() {
         let app = NSApplication.shared
@@ -28,9 +28,31 @@ final class NotchVoiceApp: NSObject, NSApplicationDelegate {
         ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
     }
 
+    /// Opens the window and starts nothing else — `--window-only`.
+    ///
+    /// For working on the window itself. Launching normally arms a consuming tap
+    /// that swallows fn across the whole machine and spends twelve seconds
+    /// loading a model, neither of which a design pass needs. Also how the
+    /// screenshots get taken.
+    private static var isWindowOnly: Bool {
+        CommandLine.arguments.contains("--window-only")
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard !Self.isHostingTests else {
             Log.dictation.info("Hosting tests — pipeline not started")
+            return
+        }
+
+        if Self.isWindowOnly {
+            Log.dictation.info("Window only — pipeline not started")
+            MainActor.assumeIsolated {
+                let coordinator = DictationCoordinator()
+                let library = LibraryWindowController(coordinator: coordinator)
+                library.show(pane: .history)
+                self.coordinator = coordinator
+                self.library = library
+            }
             return
         }
 
@@ -54,8 +76,8 @@ final class NotchVoiceApp: NSObject, NSApplicationDelegate {
                 }
             }
 
-            let settings = SettingsWindowController(coordinator: coordinator)
-            let menuBar = MenuBarController(coordinator: coordinator, settings: settings)
+            let library = LibraryWindowController(coordinator: coordinator)
+            let menuBar = MenuBarController(coordinator: coordinator, library: library)
             menuBar.install()
             island.show()
 
@@ -74,7 +96,7 @@ final class NotchVoiceApp: NSObject, NSApplicationDelegate {
                 // Settings window that sends the user to an empty list is worse
                 // than none. Opens only when something required is missing —
                 // a working install never sees it unless asked from the menu.
-                if settings.showIfNeeded() {
+                if library.showIfNeeded() {
                     Log.settings.notice("Settings opened — a required permission is missing")
                 }
             }
@@ -82,7 +104,7 @@ final class NotchVoiceApp: NSObject, NSApplicationDelegate {
             self.coordinator = coordinator
             self.island = island
             self.menuBar = menuBar
-            self.settings = settings
+            self.library = library
         }
     }
 

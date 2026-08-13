@@ -81,12 +81,15 @@ macOS only permits that with Accessibility.
 | Suite | Runs with | Covers |
 |---|---|---|
 | `Core/Tests` | `cd Core && swift test` | Pure logic — state machine, geometry, clipboard guard, island metrics |
-| `AppTests` | `xcodebuild test -scheme NotchVoice` | Anything needing AppKit or the built bundle — cue assets, failure copy against the wing it has to fit |
+| `AppTests` | `xcodebuild test -scheme NotchVoice` | Anything needing AppKit, SwiftData or the built bundle — the store, cue assets, failure copy against the wing it has to fit |
 | `Tools/SoundGen/Tests` | `cd Tools/SoundGen && swift test` | The cue synthesiser — click-freedom, envelope, level bounds |
 
 `AppTests` is hosted in the app so `Bundle.main` is the real bundle. The app
 detects it is hosting tests and skips starting its pipeline — otherwise every
 test run would arm a consuming `fn` tap and download the speech model.
+
+`Notch Voice.app/Contents/MacOS/Notch\ Voice --window-only` opens the window
+without arming the tap or loading the model, for working on the window itself.
 
 ## Versioning
 

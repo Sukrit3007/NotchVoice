@@ -1,26 +1,30 @@
 import AppKit
 import SwiftUI
 
-/// Owns the Settings window.
+/// Owns the app's window.
 ///
 /// The app runs as `.accessory` — no Dock icon, no menu bar of its own — but an
-/// accessory app can still show and focus a normal window. The activation
-/// policy is deliberately *not* switched to `.regular` while this is open: that
-/// would make a Dock icon appear and disappear around a permissions dialog,
-/// which looks like a second app launching.
+/// accessory app can still show and focus a normal window. The activation policy
+/// is deliberately *not* switched to `.regular` while this is open: that would
+/// make a Dock icon appear and disappear around a permissions dialog, which
+/// looks like a second app launching.
 @MainActor
-final class SettingsWindowController: NSObject, NSWindowDelegate {
+final class LibraryWindowController: NSObject, NSWindowDelegate {
 
-    private static let defaultSize = NSSize(width: 620, height: 460)
-    private static let minimumSize = NSSize(width: 560, height: 420)
+    /// Wider than a settings window because this one holds lists. Tall enough
+    /// that a day of history is visible without scrolling.
+    private static let defaultSize = NSSize(width: 860, height: 580)
+    private static let minimumSize = NSSize(width: 680, height: 440)
 
     private var window: NSWindow?
     private let coordinator: DictationCoordinator
     private let model: SettingsModel
+    private let stack: DataStack
 
-    init(coordinator: DictationCoordinator) {
+    init(coordinator: DictationCoordinator, stack: DataStack = .shared) {
         self.coordinator = coordinator
         self.model = SettingsModel(coordinator: coordinator)
+        self.stack = stack
         super.init()
     }
 
@@ -29,15 +33,14 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     /// Called at launch. Returns whether it opened, so the caller can tell the
     /// difference between "shown the user their problem" and "nothing to do".
     ///
-    /// Lands on Permissions rather than General: this path only runs when the
-    /// app cannot dictate at all, and dropping the user on a pane about launch
-    /// behaviour would make them hunt for the reason they were interrupted.
+    /// Lands on Permissions rather than History: this path only runs when the
+    /// app cannot dictate at all, and dropping the user on an empty history
+    /// would make them hunt for the reason they were interrupted.
     @discardableResult
     func showIfNeeded() -> Bool {
         // Readiness is checked as well as the permission panes because the two
         // can disagree: `IOHIDCheckAccess` reporting granted does not mean the
-        // tap armed for *this* copy of the binary. If the coordinator could not
-        // arm one, the app is dead however green System Settings looks.
+        // tap armed for *this* copy of the binary.
         let blocked = !PermissionChecker.status().canDictate
             || coordinator.readiness == .needsPermission
         guard blocked else { return false }
@@ -47,10 +50,10 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
     /// Opens the window, optionally jumping to a pane.
     ///
-    /// With no pane it opens wherever it was left — General the first time.
-    /// Forcing it back to General on every open would throw away the user's
-    /// place for no reason; only a specific problem earns a jump.
-    func show(pane: SettingsPane? = nil) {
+    /// With no pane it opens wherever it was left. Forcing it back to a default
+    /// on every open throws away the user's place for no reason; only a specific
+    /// problem earns a jump.
+    func show(pane: LibraryPane? = nil) {
         if let pane { model.pane = pane }
 
         if let window {
@@ -62,22 +65,20 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
         let window = NSWindow(
             contentRect: NSRect(origin: .zero, size: Self.defaultSize),
-            // `.resizable` is new: a sidebar plus a detail pane is a layout
-            // with two competing widths, and pinning it means the sidebar's
-            // ideal width has to be right for every pane at once.
-            styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
-        window.title = "Notch Voice Settings"
+        window.title = "Notch Voice"
         window.titlebarAppearsTransparent = true
         window.minSize = Self.minimumSize
         window.delegate = self
-        // Otherwise closing the window deallocates it out from under us and
-        // the next open crashes rather than reusing it.
+        // Otherwise closing the window deallocates it out from under us and the
+        // next open crashes rather than reusing it.
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(
-            rootView: SettingsView(model: model, coordinator: coordinator)
+            rootView: LibraryView(model: model, coordinator: coordinator)
+                .modelContainer(stack.container)
         )
         window.center()
 

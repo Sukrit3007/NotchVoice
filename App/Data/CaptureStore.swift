@@ -43,18 +43,17 @@ actor CaptureStore {
         try modelContext.fetchCount(FetchDescriptor<Capture>())
     }
 
-    /// Totals across every capture, for the Stats pane.
+    /// Totals across every capture.
     ///
     /// Derived from `Capture` rather than kept in a rolling counter table.
     /// A counter is a second source of truth that drifts the first time a row is
     /// deleted, and at the volumes one person generates this is a cheap scan.
+    ///
+    /// The Stats pane does **not** call this — it uses `@Query` so the numbers
+    /// move as rows arrive. Both go through `CaptureTotals.of` so there is one
+    /// implementation of the arithmetic.
     func totals() throws -> CaptureTotals {
-        let captures = try modelContext.fetch(FetchDescriptor<Capture>())
-        return CaptureTotals(
-            captures: captures.count,
-            words: captures.reduce(0) { $0 + $1.wordCount },
-            seconds: captures.reduce(0) { $0 + $1.durationSeconds }
-        )
+        CaptureTotals.of(try modelContext.fetch(FetchDescriptor<Capture>()))
     }
 
     // MARK: - Deleting
@@ -96,6 +95,17 @@ struct CaptureTotals: Sendable, Equatable {
     var captures: Int
     var words: Int
     var seconds: Double
+
+    /// Nonisolated so both callers can use it: the store reads its own fetch
+    /// inside the actor, the Stats pane reads a `@Query` result on the main
+    /// actor, and each stays in its own isolation domain.
+    static func of(_ captures: [Capture]) -> CaptureTotals {
+        CaptureTotals(
+            captures: captures.count,
+            words: captures.reduce(0) { $0 + $1.wordCount },
+            seconds: captures.reduce(0) { $0 + $1.durationSeconds }
+        )
+    }
 
     /// Average speaking rate across everything dictated. Nil before there is
     /// enough to average.

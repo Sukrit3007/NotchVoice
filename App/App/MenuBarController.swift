@@ -9,15 +9,15 @@ final class MenuBarController {
 
     private var statusItem: NSStatusItem?
     private let coordinator: DictationCoordinator
-    private let settings: SettingsWindowController
+    private let library: LibraryWindowController
 
     /// What the glyph currently shows, so a readiness change that does not cross
     /// the blocked/not-blocked line does not touch the button.
     private var shownAsBlocked: Bool?
 
-    init(coordinator: DictationCoordinator, settings: SettingsWindowController) {
+    init(coordinator: DictationCoordinator, library: LibraryWindowController) {
         self.coordinator = coordinator
-        self.settings = settings
+        self.library = library
     }
 
     func install() {
@@ -100,7 +100,7 @@ final class MenuBarController {
         // state a coincidence rather than a decision.
         menu.autoenablesItems = false
         menu.delegate = MenuRefresher.shared
-        MenuActions.shared.settings = settings
+        MenuActions.shared.library = library
         MenuRefresher.shared.rebuild = { [weak self] in self?.rebuildItems(in: $0) }
         rebuildItems(in: menu)
         return menu
@@ -143,14 +143,18 @@ final class MenuBarController {
         sounds.isEnabled = true
         menu.addItem(sounds)
 
-        let settingsItem = NSMenuItem(
-            title: "Settings…",
-            action: #selector(MenuActions.openSettings),
-            keyEquivalent: ""
-        )
-        settingsItem.target = MenuActions.shared
-        settingsItem.isEnabled = true
-        menu.addItem(settingsItem)
+        // Two doors into one window. Named for what is behind them rather than
+        // one vague "Notch Voice…", because a menu item that does not say where
+        // it lands has to be clicked to find out.
+        for (title, action) in [
+            ("History…", #selector(MenuActions.openHistory)),
+            ("Settings…", #selector(MenuActions.openSettings)),
+        ] {
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+            item.target = MenuActions.shared
+            item.isEnabled = true
+            menu.addItem(item)
+        }
 
         menu.addItem(.separator())
         let quit = NSMenuItem(
@@ -208,18 +212,22 @@ private final class MenuActions: NSObject {
 
     /// Weak: the controller owns the window, this only reaches it. A strong
     /// reference from a singleton would keep it alive for the process.
-    weak var settings: SettingsWindowController?
+    weak var library: LibraryWindowController?
 
     @objc func toggleSounds() {
         SoundPreference.isEnabled.toggle()
     }
 
+    @objc func openHistory() {
+        library?.show(pane: .history)
+    }
+
     @objc func openSettings() {
-        settings?.show()
+        library?.show(pane: .general)
     }
 
     /// Jumps straight to the pane that can fix the row that was clicked.
     @objc func openPermissions() {
-        settings?.show(pane: .permissions)
+        library?.show(pane: .permissions)
     }
 }

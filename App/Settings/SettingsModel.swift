@@ -2,44 +2,11 @@ import AppKit
 import NotchVoiceCore
 import Observation
 
-/// A section in the Settings sidebar.
+/// State behind the window: which pane is showing, whether the permissions it
+/// needs are granted, and the live hotkey test.
 ///
-/// The cases *are* the sidebar, in order — adding a pane is adding a case.
-/// Named for what they will hold rather than what they hold today: transcript
-/// cleanup (0.2) and custom vocabulary (0.3) are both dictation settings, so
-/// `dictation` absorbs them without the rename that "Hotkey" would have forced.
-enum SettingsPane: String, CaseIterable, Identifiable {
-    case general
-    case dictation
-    case permissions
-    case sound
-
-    var id: Self { self }
-
-    var title: String {
-        switch self {
-        case .general: "General"
-        case .dictation: "Dictation"
-        case .permissions: "Permissions"
-        case .sound: "Sound"
-        }
-    }
-
-    var symbol: String {
-        switch self {
-        case .general: "gearshape"
-        case .dictation: "mic"
-        case .permissions: "lock.shield"
-        case .sound: "speaker.wave.2"
-        }
-    }
-}
-
-/// State behind the Settings window.
-///
-/// One window is both the first-run flow and the permanent home for every
-/// preference, so there is a single description of "can this app work right
-/// now" instead of a wizard and a menu that can disagree.
+/// One description of "can this app work right now", so a wizard and a menu
+/// cannot disagree about it.
 @MainActor
 @Observable
 final class SettingsModel {
@@ -76,7 +43,7 @@ final class SettingsModel {
         case needsRestart
     }
 
-    var pane: SettingsPane = .general
+    var pane: LibraryPane = .history
     private(set) var status: PermissionStatus
     private(set) var test: TestState = .blocked
 

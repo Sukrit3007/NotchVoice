@@ -63,11 +63,19 @@ final class MicRecorder {
         AVCaptureDevice.default(for: .audio)?.localizedName
     }
 
+    /// Set when the chosen microphone was not attached and the system default
+    /// was used instead. Read after `start()`.
+    private(set) var fellBackToDefaultDevice = false
+
     func start() throws {
         guard !isRunning else { return }
         store.withLock { $0.removeAll(keepingCapacity: true) }
 
         let input = engine.inputNode
+        // Before `outputFormat` is read: selecting a device changes the hardware
+        // format, and a converter built against the previous one would resample
+        // from a rate nothing is producing.
+        try selectPreferredDevice(on: input)
         let hardwareFormat = input.outputFormat(forBus: 0)
 
         guard let targetFormat = AVAudioFormat(
@@ -130,6 +138,42 @@ final class MicRecorder {
     func discard() {
         teardown()
         store.withLock { $0.removeAll(keepingCapacity: false) }
+    }
+
+    /// Points the engine's input at the microphone the user chose.
+    ///
+    /// Only ever done while the engine is stopped — `kAudioOutputUnitProperty_
+    /// CurrentDevice` is rejected on a running unit, and this is called from
+    /// `start()` before `engine.start()` for that reason.
+    ///
+    /// A failure here is deliberately **not** thrown. The user asked to record;
+    /// recording from the system default is a far better answer than refusing
+    /// because their preferred interface is asleep.
+    private func selectPreferredDevice(on input: AVAudioInputNode) throws {
+        let (device, wasMissing) = MicPreference.resolve()
+        fellBackToDefaultDevice = wasMissing
+
+        if wasMissing {
+            Log.audio.notice(
+                "Chosen microphone is not attached — using the system default")
+        }
+
+        // Nil means "follow the system", which is what the unit already does.
+        guard let device, let unit = input.audioUnit else { return }
+
+        var deviceID = device.id
+        let status = AudioUnitSetProperty(
+            unit,
+            kAudioOutputUnitProperty_CurrentDevice,
+            kAudioUnitScope_Global,
+            0,
+            &deviceID,
+            UInt32(MemoryLayout<AudioDeviceID>.size)
+        )
+        if status != noErr {
+            Log.audio.error(
+                "Could not select \(device.name, privacy: .public) (OSStatus \(status, privacy: .public)) — using the system default")
+        }
     }
 
     private func teardown() {

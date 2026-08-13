@@ -112,7 +112,10 @@ final class DictationCoordinator {
 
     @ObservationIgnored private var machine: RecordingStateMachine
     @ObservationIgnored private let recorder = MicRecorder()
-    @ObservationIgnored private let transcriber = WhisperKitService()
+    /// `var` because changing the speech model means a new pipeline. The
+    /// variant is `let` on the service so nothing can swap it underneath a
+    /// decode already in flight.
+    @ObservationIgnored private var transcriber = WhisperKitService()
     @ObservationIgnored private let polisher = PolishService()
     @ObservationIgnored private let store: CaptureStore
     @ObservationIgnored private var tap: ModifierTap?
@@ -264,6 +267,24 @@ final class DictationCoordinator {
                 readiness = .modelUnavailable(error.localizedDescription)
             }
         }
+    }
+
+    /// Switches speech model and loads the new one.
+    ///
+    /// The old service is dropped rather than reconfigured, so a decode already
+    /// running finishes against the pipeline it started with. Dictation is
+    /// unavailable until the new model is ready, which is why `readiness` goes
+    /// back to `.loadingModel` rather than staying green through a swap that
+    /// takes a download.
+    func changeModel(to model: SpeechModel) {
+        guard model != ModelPreference.current else { return }
+        ModelPreference.current = model
+        Log.dictation.info("Switching to \(model.title, privacy: .public)")
+
+        transcriber = WhisperKitService(model: model)
+        modelLoaded = false
+        if readiness != .needsPermission { readiness = .loadingModel }
+        loadModel()
     }
 
     /// Whether the on-device cleanup model can run. Surfaced in Settings.

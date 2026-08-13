@@ -42,16 +42,17 @@ actor WhisperKitService {
     private var isDecoding = false
     private var waiting: [CheckedContinuation<Void, Never>] = []
 
-    init(modelVariant: String = "openai_whisper-large-v3-v20240930_turbo_632MB") {
-        self.modelVariant = modelVariant
+    init(model: SpeechModel = ModelPreference.current) {
+        self.modelVariant = model.rawValue
     }
 
-    /// The language passed to the decoder, recorded alongside each transcript.
+    /// What the decoder was told to expect, for the history row.
     ///
-    /// Fixed for now; the Settings picker lands with the rest of the dictation
-    /// upgrades. `large-v3-turbo` is multilingual, so this is a restriction the
-    /// app imposes rather than one the model has.
-    nonisolated static let language = "en"
+    /// Read at transcription time rather than captured at init: the setting can
+    /// change between launches and every row should record its own answer.
+    nonisolated static var language: String {
+        LanguagePreference.current.code ?? "auto"
+    }
 
     /// Takes the decode baton, suspending if another decode holds it.
     private func acquire() async {
@@ -108,10 +109,16 @@ actor WhisperKitService {
             return tokens.isEmpty ? nil : tokens
         }
 
+        // `detectLanguage` only means anything alongside a nil language, and a
+        // nil language without it makes the decoder guess silently. The two move
+        // together or not at all.
+        let language = LanguagePreference.current.code
+
         let options = DecodingOptions(
             task: .transcribe,
-            language: Self.language,
+            language: language,
             usePrefillPrompt: true,
+            detectLanguage: language == nil,
             skipSpecialTokens: true,
             withoutTimestamps: true,
             promptTokens: promptTokens

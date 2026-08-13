@@ -16,7 +16,9 @@ enum TranscriptionError: Error {
 /// gate below — *not* from actor isolation, which cannot provide it.
 actor WhisperKitService {
 
-    private let modelVariant: String
+    /// `nonisolated` so the coordinator can stamp it onto a capture without an
+    /// `await` — it is set once at init and never changes.
+    nonisolated let modelVariant: String
 
     /// `nonisolated(unsafe)` because `WhisperKit` is a plain non-Sendable class
     /// and its `transcribe` is a nonisolated `async` method — it hops to the
@@ -44,19 +46,12 @@ actor WhisperKitService {
         self.modelVariant = modelVariant
     }
 
-    /// Where model weights and tokenizers are cached.
+    /// The language passed to the decoder, recorded alongside each transcript.
     ///
-    /// Set explicitly because WhisperKit's default Hub cache root is the user's
-    /// **Documents folder** — 600MB+ of CoreML weights dropped next to their own
-    /// files, and synced to iCloud Drive if they have it on. Application Support
-    /// is where regenerable app data belongs, and it is excluded from backup by
-    /// convention.
-    nonisolated static let modelStore: URL = {
-        let identifier = Bundle.main.bundleIdentifier ?? "com.sukrit.notchvoice"
-        return URL.applicationSupportDirectory
-            .appending(path: identifier, directoryHint: .isDirectory)
-            .appending(path: "Models", directoryHint: .isDirectory)
-    }()
+    /// Fixed for now; the Settings picker lands with the rest of the dictation
+    /// upgrades. `large-v3-turbo` is multilingual, so this is a restriction the
+    /// app imposes rather than one the model has.
+    nonisolated static let language = "en"
 
     /// Takes the decode baton, suspending if another decode holds it.
     private func acquire() async {
@@ -77,12 +72,11 @@ actor WhisperKitService {
     func prepare(progress: @Sendable @escaping (Double) -> Void) async throws {
         guard pipe == nil else { return }
 
-        try FileManager.default.createDirectory(
-            at: Self.modelStore, withIntermediateDirectories: true)
+        try AppPaths.ensure(AppPaths.models)
 
         let config = WhisperKitConfig(
             model: modelVariant,
-            downloadBase: Self.modelStore,
+            downloadBase: AppPaths.models,
             verbose: false,
             logLevel: .error,
             prewarm: true,
@@ -101,7 +95,7 @@ actor WhisperKitService {
 
         let options = DecodingOptions(
             task: .transcribe,
-            language: "en",
+            language: Self.language,
             usePrefillPrompt: true,
             skipSpecialTokens: true,
             withoutTimestamps: true

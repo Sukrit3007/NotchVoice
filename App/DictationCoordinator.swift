@@ -114,6 +114,7 @@ final class DictationCoordinator {
     @ObservationIgnored private let recorder = MicRecorder()
     @ObservationIgnored private let transcriber = WhisperKitService()
     @ObservationIgnored private let polisher = PolishService()
+    @ObservationIgnored private let store: CaptureStore
     @ObservationIgnored private var tap: ModifierTap?
 
     @ObservationIgnored private var buffer: LevelBuffer
@@ -131,11 +132,12 @@ final class DictationCoordinator {
     /// those words — only the phase update is dropped.
     @ObservationIgnored private var session = 0
 
-    init() {
+    init(stack: DataStack = .shared) {
         let buffer = LevelBuffer(capacity: Self.waveformBarCount)
         self.buffer = buffer
         self.levels = buffer.levels
         self.machine = RecordingStateMachine(thresholds: Self.thresholds)
+        self.store = CaptureStore(modelContainer: stack.container)
     }
 
     func start() {
@@ -362,6 +364,10 @@ final class DictationCoordinator {
         Cues.play(.stop)
         let target = focus
         let session = self.session
+        // Read here rather than inside the Task: by the time transcription
+        // returns the user may have switched headphones, and the row should say
+        // which microphone actually heard this take.
+        let micDevice = MicRecorder.currentInputName
 
         Task {
             let startedAt = Self.now()
@@ -390,6 +396,22 @@ final class DictationCoordinator {
                 let outcome = await Paster.deliver(text, to: target)
                 Log.deliver.info(
                     "Delivery: \(String(describing: outcome), privacy: .public) (target \(target?.bundleID ?? "none", privacy: .public))")
+
+                // After delivery, so a row means the words reached the user.
+                // `rawText` only when polish changed something — nil otherwise
+                // answers "was this misheard, or tidied into something I did
+                // not say?" without storing the same string twice.
+                record(
+                    CaptureDraft(
+                        text: text,
+                        rawText: text == raw ? nil : raw,
+                        durationSeconds: duration,
+                        language: WhisperKitService.language,
+                        targetBundleID: outcome == .pasted ? target?.bundleID : nil,
+                        targetAppName: outcome == .pasted ? target?.appName : nil,
+                        micDevice: micDevice,
+                        modelVariant: transcriber.modelVariant
+                    ))
                 finish(session,
                        with: outcome == .pasted ? .done : .copied,
                        dwell: outcome == .pasted ? Self.doneDwell : Self.errorDwell)
@@ -422,6 +444,23 @@ final class DictationCoordinator {
         // dropping out of the notch instead.
         if phase == .done || phase == .copied { Cues.play(.done) }
         scheduleCollapse(after: dwell)
+    }
+
+    /// Files a delivered dictation into history, or complains and moves on.
+    ///
+    /// Deliberately not awaited by the caller and deliberately not throwing
+    /// upward. The transcript is already in the user's document by this point;
+    /// a store that will not write is a broken history, not a broken dictation,
+    /// and blocking on it would make every take wait for a disk.
+    private func record(_ draft: CaptureDraft) {
+        Task { [store] in
+            do {
+                try await store.record(draft)
+            } catch {
+                Log.data.error(
+                    "Capture not recorded: \(error.localizedDescription, privacy: .public)")
+            }
+        }
     }
 
     /// Shows a failure immediately, outside the async pipeline.

@@ -53,6 +53,16 @@ final class MicRecorder {
         return Date().timeIntervalSince(startedAt)
     }
 
+    /// The system's current input device, by name.
+    ///
+    /// Recorded against each capture: a take that came out empty and one that
+    /// came out wrong are different problems, and which microphone heard it is
+    /// the first thing worth knowing about either. Read at capture time because
+    /// the answer changes when headphones are plugged in mid-session.
+    static var currentInputName: String? {
+        AVCaptureDevice.default(for: .audio)?.localizedName
+    }
+
     func start() throws {
         guard !isRunning else { return }
         store.withLock { $0.removeAll(keepingCapacity: true) }

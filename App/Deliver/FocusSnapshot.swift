@@ -8,11 +8,16 @@ struct FocusSnapshot: Sendable {
     let pid: pid_t
     let bundleID: String?
 
+    /// Taken here rather than resolved from the bundle ID later, so history can
+    /// still say "Slack" after Slack has been uninstalled.
+    let appName: String?
+
     static func capture() -> FocusSnapshot? {
         guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
         return FocusSnapshot(
             pid: app.processIdentifier,
-            bundleID: app.bundleIdentifier
+            bundleID: app.bundleIdentifier,
+            appName: app.localizedName
         )
     }
 

@@ -61,6 +61,32 @@ enum PermissionChecker {
                 : nil
         }
 
+        /// The same permission, explained to someone who has never used the app.
+        ///
+        /// Longer than `purpose`, which is a fragment sitting next to a tick in
+        /// a settings list. Here it is the whole screen, and each one says what
+        /// macOS is about to ask *and* what the app does with it — because these
+        /// are the two most invasive-sounding permissions on the Mac and
+        /// "Notch Voice would like to control your computer" deserves an answer.
+        var onboardingExplanation: String {
+            switch self {
+            case .microphone:
+                "So it can hear you. Audio is only captured while you hold the "
+                + "dictation key, and it is transcribed on this Mac and then "
+                + "thrown away — never saved, never uploaded."
+            case .inputMonitoring:
+                "So it can tell when you're holding the dictation key. macOS calls "
+                + "this Input Monitoring because it's the same permission a "
+                + "keylogger would need. Notch Voice looks at one key and ignores "
+                + "everything else you type."
+            case .accessibility:
+                "Two things: reserving the dictation key so it doesn't also do "
+                + "whatever macOS normally does with it, and pasting the text at "
+                + "your cursor when you're done. Without it the key does nothing "
+                + "at all."
+            }
+        }
+
         var symbol: String {
             switch self {
             case .microphone: "mic.fill"

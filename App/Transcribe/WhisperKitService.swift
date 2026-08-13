@@ -6,6 +6,18 @@ enum TranscriptionError: Error {
     case empty
 }
 
+/// How far along getting the speech model is.
+///
+/// Two phases rather than one number, because the second half genuinely has no
+/// measurable progress — CoreML compiling and prewarming reports nothing.
+enum ModelPhase: Sendable, Equatable {
+    /// Fraction of the download, 0...1.
+    case downloading(Double)
+    /// Downloaded; compiling and prewarming. No fraction exists for this.
+    case loading
+    case ready
+}
+
 /// Owns the WhisperKit pipeline for the life of the process.
 ///
 /// The model is loaded once at launch and kept resident, trading ~1GB of
@@ -70,22 +82,45 @@ actor WhisperKitService {
 
     /// Downloads the model if it isn't cached, loads it, and prewarms the
     /// compute units. Safe to call more than once; later calls no-op.
-    func prepare(progress: @Sendable @escaping (Double) -> Void) async throws {
+    /// Fetches the model if it is not cached, then loads it.
+    ///
+    /// Download and load are separate calls rather than one `download: true`
+    /// config, because only the download can report progress. Rolled together,
+    /// the app can say nothing at all for however long a 630MB fetch takes.
+    ///
+    /// The two phases are reported distinctly because they *are* distinct:
+    /// downloading has a fraction, loading does not. A bar that fills to 90% and
+    /// then sits there for twelve seconds while CoreML compiles is a worse lie
+    /// than admitting the second half is unmeasured.
+    func prepare(onPhase: @Sendable @escaping (ModelPhase) -> Void) async throws {
         guard pipe == nil else { return }
 
         try AppPaths.ensure(AppPaths.models)
 
+        onPhase(.downloading(0))
+        let folder = try await WhisperKit.download(
+            variant: modelVariant,
+            downloadBase: AppPaths.models,
+            progressCallback: { progress in
+                onPhase(.downloading(progress.fractionCompleted))
+            }
+        )
+
+        onPhase(.loading)
         let config = WhisperKitConfig(
             model: modelVariant,
             downloadBase: AppPaths.models,
+            // Points at what was just fetched, and `download: false` so this
+            // cannot quietly re-fetch after the progress UI has moved on.
+            modelFolder: folder.path,
             verbose: false,
             logLevel: .error,
             prewarm: true,
             load: true,
-            download: true
+            download: false
         )
         pipe = try await WhisperKit(config)
-        progress(1.0)
+        onPhase(.ready)
     }
 
     /// Transcribes, optionally biased toward a prompt.

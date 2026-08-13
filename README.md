@@ -88,8 +88,23 @@ macOS only permits that with Accessibility.
 detects it is hosting tests and skips starting its pipeline — otherwise every
 test run would arm a consuming `fn` tap and download the speech model.
 
-`Notch Voice.app/Contents/MacOS/Notch\ Voice --window-only` opens the window
-without arming the tap or loading the model, for working on the window itself.
+Two launch flags for working on the UI, neither of which starts the pipeline:
+
+- `--window-only` opens the library window without arming the tap or loading the model.
+- `--onboarding` replays the first-run flow without marking it complete.
+
+## Note for the download page
+
+The first thing a new user meets is **not** in this app — it is macOS refusing to
+open it, because the build is self-signed rather than notarized. That explanation
+belongs on the download page, before the first launch:
+
+> macOS will say it can't verify the app. Open **System Settings → Privacy &
+> Security**, scroll down, and click **Open Anyway**.
+
+Deliberately not an onboarding screen: by the time any code in the app runs, the
+user is already past Gatekeeper, and explaining a dialog they cleared thirty
+seconds ago teaches them nothing.
 
 ## Versioning
 

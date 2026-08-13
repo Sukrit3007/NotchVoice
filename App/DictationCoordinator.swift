@@ -251,13 +251,19 @@ final class DictationCoordinator {
         return armTap()
     }
 
+    /// How far along getting the speech model is. Drives the onboarding
+    /// progress bar; the island only cares whether it is `.ready`.
+    private(set) var modelPhase: ModelPhase = .loading
+
     /// Loads the speech model. No-ops if it is already resident.
     func loadModel() {
         Task {
             let startedAt = Self.now()
             Log.dictation.info("Loading model… (~12s; dictation is unavailable until ready)")
             do {
-                try await transcriber.prepare { _ in }
+                try await transcriber.prepare { [weak self] phase in
+                    Task { @MainActor in self?.modelPhase = phase }
+                }
                 Log.dictation.info("Model ready in \(Self.now() - startedAt, privacy: .public)s")
                 modelLoaded = true
                 if readiness != .needsPermission { readiness = .ready }

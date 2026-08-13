@@ -9,6 +9,35 @@ final class NotchVoiceApp: NSObject, NSApplicationDelegate {
     @MainActor private var island: IslandWindowController?
     @MainActor private var menuBar: MenuBarController?
     @MainActor private var library: LibraryWindowController?
+    @MainActor private var onboarding: OnboardingWindowController?
+
+    /// Starts the pipeline and surfaces anything still missing.
+    ///
+    /// Split out because it runs from two places: straight away on a normal
+    /// launch, and after the first-run flow closes on the first one.
+    @MainActor
+    private func beginDictating(
+        coordinator: DictationCoordinator,
+        library: LibraryWindowController
+    ) {
+        Task {
+            // Prompts on first launch; a no-op once answered. Held ahead of
+            // start() so the very first hold-to-talk is not the thing that
+            // raises the microphone dialog, mid-sentence.
+            let granted = await PermissionChecker.requestMicrophone()
+            if !granted {
+                Log.audio.error("Microphone DENIED — capture will fail")
+            }
+            coordinator.start()
+
+            // After start(), so the tap has been attempted: attempting one is
+            // what gets this app listed under Input Monitoring, and a window
+            // that sends the user to an empty list is worse than none.
+            if library.showIfNeeded() {
+                Log.settings.notice("Settings opened — a required permission is missing")
+            }
+        }
+    }
 
     static func main() {
         let app = NSApplication.shared
@@ -36,6 +65,15 @@ final class NotchVoiceApp: NSObject, NSApplicationDelegate {
     /// screenshots get taken.
     private static var isWindowOnly: Bool {
         CommandLine.arguments.contains("--window-only")
+    }
+
+    /// Replays the first-run flow — `--onboarding`.
+    ///
+    /// Without it the only way to see this screen is to clear the preference on
+    /// a real install, which means every look at it costs a round trip through
+    /// System Settings. Does not mark onboarding complete.
+    private static var replaysOnboarding: Bool {
+        CommandLine.arguments.contains("--onboarding")
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -81,25 +119,27 @@ final class NotchVoiceApp: NSObject, NSApplicationDelegate {
             menuBar.install()
             island.show()
 
-            Task {
-                // Prompts on first launch; a no-op once answered. Held ahead
-                // of start() so the very first hold-to-talk is not the thing
-                // that raises the microphone dialog, mid-sentence.
-                let granted = await PermissionChecker.requestMicrophone()
-                if !granted {
-                    Log.audio.error("Microphone DENIED — capture will fail")
+            // First run gets the guided flow instead of a permission dialog
+            // arriving out of nowhere. It owns the prompts, so `start()` waits
+            // until it is done — arming a tap behind it would put the app in
+            // the Input Monitoring list before the screen explaining why.
+            guard OnboardingPreference.isComplete, !Self.replaysOnboarding else {
+                let onboarding = OnboardingWindowController(coordinator: coordinator)
+                self.onboarding = onboarding
+                Log.settings.notice("First run — showing onboarding")
+                onboarding.show { [weak self] in
+                    MainActor.assumeIsolated {
+                        self?.beginDictating(coordinator: coordinator, library: library)
+                    }
                 }
-                coordinator.start()
-
-                // After start(), so the tap has been attempted: attempting one
-                // is what gets this app listed under Input Monitoring, and a
-                // Settings window that sends the user to an empty list is worse
-                // than none. Opens only when something required is missing —
-                // a working install never sees it unless asked from the menu.
-                if library.showIfNeeded() {
-                    Log.settings.notice("Settings opened — a required permission is missing")
-                }
+                self.coordinator = coordinator
+                self.island = island
+                self.menuBar = menuBar
+                self.library = library
+                return
             }
+
+            beginDictating(coordinator: coordinator, library: library)
 
             self.coordinator = coordinator
             self.island = island

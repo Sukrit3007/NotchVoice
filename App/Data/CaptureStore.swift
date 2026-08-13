@@ -1,4 +1,5 @@
 import Foundation
+import NotchVoiceCore
 import SwiftData
 
 /// Everything the app *writes* to the store, off the main actor.
@@ -41,6 +42,50 @@ actor CaptureStore {
 
     func captureCount() throws -> Int {
         try modelContext.fetchCount(FetchDescriptor<Capture>())
+    }
+
+    /// Terms to suggest to the decoder before it transcribes.
+    ///
+    /// Starred first, because the prompt has a budget and the user has already
+    /// said which words matter most.
+    func biasTerms() throws -> [String] {
+        let entries = try modelContext.fetch(FetchDescriptor<DictionaryEntry>())
+        return entries
+            .sorted { ($0.isStarred ? 0 : 1, $0.phrase) < ($1.isStarred ? 0 : 1, $1.phrase) }
+            .map(\.phrase)
+    }
+
+    /// Every rewrite to run over a finished transcript.
+    ///
+    /// Dictionary corrections and snippet expansions in one list, because they
+    /// are the same operation and running them in two passes would let one
+    /// rewrite the output of the other.
+    func rewriteRules() throws -> [TranscriptRewriter.Rule] {
+        let entries = try modelContext.fetch(FetchDescriptor<DictionaryEntry>())
+        let snippets = try modelContext.fetch(FetchDescriptor<Snippet>())
+
+        return entries.compactMap { entry in
+            guard let misheard = entry.misheardAs, !misheard.isEmpty else { return nil }
+            return TranscriptRewriter.Rule(match: misheard, replacement: entry.phrase)
+        } + snippets.map {
+            TranscriptRewriter.Rule(match: $0.trigger, replacement: $0.expansion)
+        }
+    }
+
+    /// Records that a rewrite fired, against whichever kind of rule it was.
+    func noteRewrites(_ matches: [String]) throws {
+        guard !matches.isEmpty else { return }
+        let entries = try modelContext.fetch(FetchDescriptor<DictionaryEntry>())
+        let snippets = try modelContext.fetch(FetchDescriptor<Snippet>())
+
+        for match in matches {
+            if let entry = entries.first(where: { $0.misheardAs == match }) {
+                entry.timesApplied += 1
+            } else if let snippet = snippets.first(where: { $0.trigger == match }) {
+                snippet.timesUsed += 1
+            }
+        }
+        try modelContext.save()
     }
 
     /// Totals across every capture.

@@ -24,12 +24,40 @@ struct DictationPane: View {
                 HotkeyTestRow(model: model, coordinator: coordinator)
             }
 
+            Section {
+                Toggle("Use what's on screen", isOn: readsScreenContext)
+            } header: {
+                Text("Accuracy")
+            } footer: {
+                Text(
+                    "Reads the text already in the field you're dictating into and "
+                    + "suggests it to the speech model, so names and jargon already "
+                    + "on screen come out spelled right. Password fields are never "
+                    + "read. Nothing is stored and nothing leaves your Mac."
+                )
+            }
+
             Section("Cleanup") {
                 cleanupRow
             }
         }
         .formStyle(.grouped)
         .animation(.smooth(duration: 0.25), value: model.test)
+    }
+
+    /// Mirrored into `@State` because `ContextPreference` is `UserDefaults`, and
+    /// a computed property over defaults is invisible to SwiftUI — the toggle
+    /// would flip back on the next redraw.
+    @State private var readsScreenContextStorage = ContextPreference.isEnabled
+
+    private var readsScreenContext: Binding<Bool> {
+        Binding(
+            get: { readsScreenContextStorage },
+            set: {
+                readsScreenContextStorage = $0
+                ContextPreference.isEnabled = $0
+            }
+        )
     }
 
     /// Writes through the model, which cancels any gesture in flight before the

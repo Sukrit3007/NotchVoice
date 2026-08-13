@@ -109,6 +109,70 @@ struct CaptureStoreTests {
         // transcription and counting must not throw away the dictation.
         try await store().noteDictionaryUse(phrase: "never added")
     }
+
+    // MARK: - Bias and rewrites
+
+    @Test("starred words are offered to the decoder first")
+    func biasTermsPutStarredFirst() async throws {
+        // The prompt has a budget, so order decides what survives truncation.
+        let stack = try DataStack.inMemory()
+        let context = ModelContext(stack.container)
+        context.insert(DictionaryEntry(phrase: "Alpha"))
+        context.insert(DictionaryEntry(phrase: "Zulu", isStarred: true))
+        try context.save()
+
+        let terms = try await CaptureStore(modelContainer: stack.container).biasTerms()
+        #expect(terms == ["Zulu", "Alpha"])
+    }
+
+    @Test("only entries with a replacement become rewrite rules")
+    func biasOnlyEntriesAreNotRules() async throws {
+        // A bare custom word biases the decoder; it must not also rewrite text
+        // the user actually said.
+        let stack = try DataStack.inMemory()
+        let context = ModelContext(stack.container)
+        context.insert(DictionaryEntry(phrase: "Sukrit"))
+        context.insert(DictionaryEntry(phrase: "Kubernetes", misheardAs: "cuber netties"))
+        try context.save()
+
+        let rules = try await CaptureStore(modelContainer: stack.container).rewriteRules()
+        #expect(rules.count == 1)
+        #expect(rules.first?.match == "cuber netties")
+        #expect(rules.first?.replacement == "Kubernetes")
+    }
+
+    @Test("snippets and dictionary corrections come back as one rule set")
+    func rulesIncludeSnippets() async throws {
+        // One pass over both, so a snippet cannot expand into text that a
+        // dictionary rule then rewrites again.
+        let stack = try DataStack.inMemory()
+        let context = ModelContext(stack.container)
+        context.insert(DictionaryEntry(phrase: "WhisperKit", misheardAs: "whisper kit"))
+        context.insert(Snippet(trigger: "my address", expansion: "221B Baker Street"))
+        try context.save()
+
+        let rules = try await CaptureStore(modelContainer: stack.container).rewriteRules()
+        #expect(rules.count == 2)
+        #expect(rules.contains { $0.replacement == "221B Baker Street" })
+    }
+
+    @Test("a fired rule is counted against whichever kind it was")
+    func rewritesAreCountedByKind() async throws {
+        let stack = try DataStack.inMemory()
+        let store = CaptureStore(modelContainer: stack.container)
+        let context = ModelContext(stack.container)
+        context.insert(DictionaryEntry(phrase: "Kubernetes", misheardAs: "cuber netties"))
+        context.insert(Snippet(trigger: "my address", expansion: "221B Baker Street"))
+        try context.save()
+
+        // Matched on what the transcript said, not on what it became.
+        try await store.noteRewrites(["cuber netties", "my address", "unknown"])
+
+        let entry = try context.fetch(FetchDescriptor<DictionaryEntry>()).first
+        let snippet = try context.fetch(FetchDescriptor<Snippet>()).first
+        #expect(entry?.timesApplied == 1)
+        #expect(snippet?.timesUsed == 1)
+    }
 }
 
 @Suite("Capture")

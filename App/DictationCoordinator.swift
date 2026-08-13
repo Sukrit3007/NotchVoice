@@ -119,6 +119,9 @@ final class DictationCoordinator {
 
     @ObservationIgnored private var buffer: LevelBuffer
     @ObservationIgnored private var focus: FocusSnapshot?
+    /// Text that was in the target field when the key went down. Never stored,
+    /// never sent anywhere — see `AXContextReader`.
+    @ObservationIgnored private var screenContext: String?
     @ObservationIgnored private var maxDurationTimer: Task<Void, Never>?
     @ObservationIgnored private var collapseTask: Task<Void, Never>?
 
@@ -314,6 +317,11 @@ final class DictationCoordinator {
         session &+= 1
         // Captured before any window is shown — see FocusSnapshot's note.
         focus = FocusSnapshot.capture()
+        // Same reason, and the stronger one: once the island is up, *it* is not
+        // the focused element but the frontmost app may have shifted, and by the
+        // time transcription finishes the user has often clicked elsewhere. The
+        // field being dictated into is only knowable now.
+        screenContext = ContextPreference.isEnabled ? AXContextReader.focusedText() : nil
         resetWaveform()
 
         armMaxDurationTimer()
@@ -368,11 +376,16 @@ final class DictationCoordinator {
         // returns the user may have switched headphones, and the row should say
         // which microphone actually heard this take.
         let micDevice = MicRecorder.currentInputName
+        let context = screenContext
 
         Task {
             let startedAt = Self.now()
             do {
-                let raw = try await transcriber.transcribe(samples)
+                // Built inside the Task so a slow store read cannot delay the
+                // island appearing. Failing to read it is not an error — the
+                // dictation just goes ahead unbiased.
+                let prompt = await biasPrompt(context: context)
+                let raw = try await transcriber.transcribe(samples, prompt: prompt)
                 // `.private` on the transcript, public on its shape: the log is
                 // readable by anything that can run `log show`. See `Log`.
                 Log.dictation.info(
@@ -388,10 +401,16 @@ final class DictationCoordinator {
                     return
                 }
 
+                // Rewrites run **before** polish, not after. Polish is told to
+                // preserve the user's wording; handing it a transcript that
+                // still says "cuber netties" means it tidies around the error,
+                // and a snippet expanded afterwards would arrive unpolished.
+                let corrected = await rewrite(raw)
+
                 // Only the live dictation shows a polishing state; a late one
                 // still polishes and delivers, it just does not touch the island.
                 if session == self.session { setPhase(.polishing) }
-                let text = await polisher.polish(raw, within: Self.polishDeadline)
+                let text = await polisher.polish(corrected, within: Self.polishDeadline)
 
                 let outcome = await Paster.deliver(text, to: target)
                 Log.deliver.info(
@@ -444,6 +463,45 @@ final class DictationCoordinator {
         // dropping out of the notch instead.
         if phase == .done || phase == .copied { Cues.play(.done) }
         scheduleCollapse(after: dwell)
+    }
+
+    /// Custom words plus whatever was on screen, as one prompt for the decoder.
+    ///
+    /// Never throws upward: an unreadable store means an unbiased dictation,
+    /// which is exactly what the app did before this existed.
+    private func biasPrompt(context: String?) async -> String? {
+        let terms: [String]
+        do {
+            terms = try await store.biasTerms()
+        } catch {
+            Log.data.error(
+                "Bias terms unavailable: \(error.localizedDescription, privacy: .public)")
+            terms = []
+        }
+        return BiasPrompt.build(terms: terms, context: context)
+    }
+
+    /// Applies dictionary corrections and snippet expansions.
+    ///
+    /// Counting which rules fired is deliberately not awaited — a statistic must
+    /// never be on the path between the user's words and their document.
+    private func rewrite(_ text: String) async -> String {
+        do {
+            let rules = try await store.rewriteRules()
+            guard !rules.isEmpty else { return text }
+
+            let result = TranscriptRewriter.apply(rules, to: text)
+            if result.didChange {
+                Log.dictation.info(
+                    "Rewrote \(result.applied.count, privacy: .public) phrase(s)")
+                Task { [store] in try? await store.noteRewrites(result.applied) }
+            }
+            return result.text
+        } catch {
+            Log.data.error(
+                "Rewrite rules unavailable: \(error.localizedDescription, privacy: .public)")
+            return text
+        }
     }
 
     /// Files a delivered dictation into history, or complains and moves on.

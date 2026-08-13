@@ -87,18 +87,34 @@ actor WhisperKitService {
         progress(1.0)
     }
 
-    func transcribe(_ samples: [Float]) async throws -> String {
+    /// Transcribes, optionally biased toward a prompt.
+    ///
+    /// The prompt is read by Whisper as preceding context, which pulls its
+    /// output toward the vocabulary in it — how custom words and on-screen
+    /// context get fixed at the point they are *heard* rather than rewritten
+    /// afterwards on a guess about what went wrong.
+    func transcribe(_ samples: [Float], prompt: String? = nil) async throws -> String {
         guard let pipe else { throw TranscriptionError.notReady }
 
         await acquire()
         defer { release() }
+
+        // Tokenised here rather than by the caller: the token IDs are specific
+        // to this pipeline's tokenizer, and a caller holding stale ones after a
+        // model change would bias toward nonsense.
+        let promptTokens = prompt.flatMap { text -> [Int]? in
+            guard let tokenizer = pipe.tokenizer else { return nil }
+            let tokens = tokenizer.encode(text: text)
+            return tokens.isEmpty ? nil : tokens
+        }
 
         let options = DecodingOptions(
             task: .transcribe,
             language: Self.language,
             usePrefillPrompt: true,
             skipSpecialTokens: true,
-            withoutTimestamps: true
+            withoutTimestamps: true,
+            promptTokens: promptTokens
         )
 
         let results = try await pipe.transcribe(

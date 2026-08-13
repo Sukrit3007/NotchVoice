@@ -60,15 +60,43 @@ Each was chosen deliberately; rationale recorded so they can be revisited knowin
 | Speech engine | WhisperKit (`argmaxinc/argmax-oss-swift`) | Native Swift, CoreML/ANE accelerated, in-process. No Python sidecar. |
 | Transcription mode | Batch — record while held, transcribe on release | Simpler and more accurate than streaming. ~1.5s wait is acceptable. |
 | Model residency | Always loaded | Every dictation is fast, no exceptions. Costs ~1GB resident permanently. Accepted. |
-| Activation | Single modifier key, hold to talk | Modifiers alone are inert in every app, so the key tap can be observe-only. |
-| Lock mode | Double-tap the same key | Hands-free for long-form without a second binding to learn. |
-| Key tap | Observe-only `CGEventTap` on `.flagsChanged` | Never intercepts or swallows a keystroke. Cannot wedge system typing. |
-| Bindable keys | Modifiers only | Consequence of observe-only. Arbitrary keys would require a consuming tap. |
+| Activation | `fn`, hold to talk | The one key that types nothing in any combination, so the island can appear at 0ms with no risk of flashing on a composed character. |
+| Lock mode | `fn`+`Space` chord | Unambiguous the instant it arrives. A double tap could only be recognised by waiting out a window, so every short tap paid that delay. |
+| Key tap | **Consuming** `CGEventTap` | Reversal of the original decision — see below. Required to reserve `fn`. |
+| Bindable keys | `fn`, or a right-hand modifier | `fn` needs an Apple keyboard; `KeyboardCapabilities` falls back when there is none. |
 | Text delivery | Clipboard round-trip + synthetic ⌘V | Works in Electron, terminals, and custom text engines where AX insertion fails. |
-| Delivery fallback | Copy-only when Accessibility not granted | App stays useful before the permission is granted. |
+| Delivery fallback | Copy-only when the paste is not consumed | Detected, not assumed — the text is staged as a pasteboard promise and the provider callback is the proof. |
 | Refinement LLM | Apple Foundation Models | On-device, system-provided. Zero download, zero bundle size, no second runtime. |
 | Non-notch display | Match the system volume HUD | Native-feeling. Faking a notch on a notchless screen looks wrong. |
 | Process model | Single process, no XPC split | Crash isolation isn't worth the complexity for a personal tool. |
+
+### Note on reversing the observe-only decision
+
+The original spec chose an observe-only tap and then derived the binding from it:
+modifiers only, because "arbitrary keys would require a consuming tap". That reasoning was
+sound and the conclusion has been reversed anyway, knowingly.
+
+What changed is the target. Matching Wispr Flow means binding `fn`, and `fn` cannot be
+bound observationally: on a Mac where the Globe key is set to "Show Emoji & Symbols"
+(`AppleFnUsageType = 2`, common) an observed-but-not-consumed `fn` opens the emoji picker
+on every dictation, and nothing elsewhere in the app can prevent it. Wispr Flow consumes
+for exactly this reason; its helper binary carries the string
+`Suppressing escape key during dictation`.
+
+The cost is accepted rather than dismissed. This app's callback now runs inside the path of
+every keystroke on the machine, and a hang there stops typing everywhere until macOS
+disables the tap. Three mitigations, all in `ModifierTap`:
+
+- The callback is branch-only — no allocation, no I/O, no logging on the hot path.
+- The `tapDisabledByTimeout` handler re-arms, so a disabled tap recovers rather than
+  silently ending the session.
+- Exactly three events are ever destroyed: the binding key itself (only when it is `fn`),
+  `Space` while the binding is held, and `Escape` while a dictation is in flight. `fn` in
+  combination — `fn`+`Delete`, `fn`+arrows — is untouched.
+
+A second consequence: **Accessibility is now required.** A `.listenOnly` tap is granted on
+Input Monitoring alone; a consuming one needs Accessibility. The old copy-only degradation
+no longer exists, because without Accessibility the hotkey never fires at all.
 
 ### Note on the model-residency choice
 
@@ -80,17 +108,18 @@ contained change to `ModelManager`, not a redesign.
 ## 5. Interaction model
 
 ```
-right-⌥ held ─────────────────────────► island expands, live waveform
-       released ──────────────────────► "transcribing…"  ~1.5s
+fn held ──────────────────────────────► island expands, live waveform
+   released ──────────────────────────► "transcribing…" then "tidying…"
                                       ► text pasted at the cursor
 
-right-⌥ double-tapped ────────────────► recording LOCKS (hands-free)
-       tapped again ──────────────────► stop, transcribe, paste
+fn + Space ───────────────────────────► recording LOCKS (hands-free)
+   fn tapped again ───────────────────► stop, transcribe, paste
 ```
 
-Default binding: **right-Option**. Rebindable in Settings to right-⌘, right-⇧, right-⌃, or
-a combination. Left- and right-hand variants are distinguished by reading the raw keyCode
-from the `.flagsChanged` event (right-⌘ 54, right-⇧ 60, right-⌥ 61, right-⌃ 62).
+Default binding: **`fn`** (keycode 63). Rebindable in Settings to right-⌘, right-⇧,
+right-⌥ or right-⌃, and downgraded automatically to right-⌥ on a keyboard with no `fn`
+key. Left- and right-hand variants are distinguished by reading the raw keyCode from the
+`.flagsChanged` event (right-⌘ 54, right-⇧ 60, right-⌥ 61, right-⌃ 62).
 
 ### State machine
 
@@ -100,19 +129,21 @@ first word. The gesture is resolved on key-up:
 | Gesture | Resolution |
 |---|---|
 | Held ≥ 400ms, then released | Push-to-talk. Stop, transcribe, paste. |
-| Tapped < 400ms, second tap within 300ms | Lock. Continue recording hands-free. |
-| Tapped < 400ms, no second tap | Discard. No transcription, no UI beyond a brief collapse. |
+| Tapped < 400ms | Discard, immediately. There is no window to wait out. |
+| `Space` while held | Lock. Continue recording hands-free. |
 | Any other key pressed while held | **Cancel silently.** Discard audio, hide island. |
 | Locked, then key tapped | Stop, transcribe, paste. |
-| `Esc` while recording or locked | Cancel. Discard audio. |
+| `Esc` while recording or locked | Cancel. Discard audio. The keystroke is consumed. |
 
 **Maximum recording length: 5 minutes.** Locked mode makes it easy to start a session and
 walk away; without a cap that becomes an unbounded buffer and a very slow transcription.
 On hitting the cap the recording stops itself and transcribes normally, as though the key
 had been tapped. The island shows the cap was reached rather than failing silently.
 
-The cancel-on-other-key rule is what makes binding to ⌥ safe: `⌥ + o` still types `ø`,
-`⌥ + ←` still jumps a word, and neither produces a stray dictation.
+The cancel-on-other-key rule is what keeps a *modifier* binding safe when one is in use:
+`⌥ + o` still types `ø`, `⌥ + ←` still jumps a word, and neither produces a stray
+dictation. On the default `fn` binding it is belt-and-braces rather than load-bearing,
+since `fn` is consumed and composes with nothing.
 
 ## 6. UI states
 
@@ -147,15 +178,25 @@ guessed from a description.
 
 ## 7. Display handling
 
+One silhouette on every display.
+
 - **Screen has a notch** → use the real notch. Geometry from `safeAreaInsets` and the
   auxiliary top areas.
-- **Screen has no notch** → render a HUD matching the running macOS version's volume meter
-  in position, size, corner radius, material, and animation curve.
+- **Screen has no notch** → draw one, at the dimensions borrowed from a display that has
+  a physical cutout. Borrowed rather than fixed, so a 16" MacBook's 200pt notch and the
+  monitor beside it agree; falls back to 185×32 on a Mac with no notched display at all.
 
-Explicitly not doing: drawing a fake notch on a notchless display.
+**Reversed from the original decision.** This section previously read "explicitly not
+doing: drawing a fake notch on a notchless display", and notchless screens got a floating
+capsule styled after the system volume HUD. That produced two appearances for one app —
+a pill on the monitor and a notch on the laptop — and the capsule's match against the real
+system HUD was never actually performed. A single shape everywhere is worth more than a
+faithful imitation of a control this app is not.
 
-The look must be verified against the real system HUD during implementation (trigger a
-volume change, screenshot, match) — not reproduced from memory.
+The drawn notch is **only present while dictating**. The physical one is a hole that
+exists regardless, so the island can rest beside it for the cost of a small wing; a drawn
+one at rest would be a black block parked on the wallpaper for the whole session. It
+arrives from the top edge in one motion, already at full width.
 
 Island follows the screen the user is working on. Display connect/disconnect and
 `NSApplication.didChangeScreenParametersNotification` rebuild the window against the new

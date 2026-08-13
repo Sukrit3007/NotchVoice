@@ -3,24 +3,24 @@ import Foundation
 /// Resolves raw key events from the modifier tap into recording effects.
 ///
 /// Capture always starts on key-down, before the gesture is known — deciding
-/// first would clip the first word. The gesture is resolved on key-up, and a
-/// short tap keeps capturing while it waits to find out whether a second tap
-/// is coming.
+/// first would clip the first word. The gesture is resolved on key-up.
+///
+/// Hands-free is a **chord**: the binding key plus Space, held together. Chosen
+/// over a double tap because it is unambiguous the instant it arrives — a double
+/// tap can only be recognised by waiting out a window, which every short tap
+/// then pays for whether or not a second one is coming.
 ///
 /// Pure logic: no AppKit, no timers, no clock reads. The host supplies
-/// timestamps and drives `.doubleTapWindowExpired` and `.maxDurationReached`
-/// from its own timers, which is what makes every branch testable.
+/// timestamps and drives `.maxDurationReached` from its own timer, which is what
+/// makes every branch testable.
 public struct RecordingStateMachine: Sendable {
 
     public struct Thresholds: Sendable {
-        /// Held at least this long counts as push-to-talk rather than a tap.
+        /// Held at least this long counts as push-to-talk rather than a stray tap.
         public let hold: TimeInterval
-        /// A second tap within this window of the first release locks.
-        public let doubleTap: TimeInterval
 
-        public init(hold: TimeInterval = 0.4, doubleTap: TimeInterval = 0.3) {
+        public init(hold: TimeInterval = 0.4) {
             self.hold = hold
-            self.doubleTap = doubleTap
         }
     }
 
@@ -28,9 +28,6 @@ public struct RecordingStateMachine: Sendable {
         case idle
         /// Key is down; the gesture is not yet decided.
         case holding(downAt: TimeInterval)
-        /// Key was tapped and released quickly. Still capturing while we wait
-        /// to see whether a second tap arrives.
-        case awaitingSecondTap(firstUpAt: TimeInterval)
         /// Hands-free. Capture continues until the key is tapped again.
         case locked
     }
@@ -38,24 +35,21 @@ public struct RecordingStateMachine: Sendable {
     public enum Event: Equatable, Sendable {
         case keyDown(at: TimeInterval)
         case keyUp(at: TimeInterval)
-        /// Any non-binding key was pressed. Makes `⌥ + o` still type `ø`.
+        /// Space arrived while the binding key was held — the hands-free chord.
+        case chordPressed
+        /// Any other non-binding key was pressed.
         case otherKeyPressed
         case escapePressed
-        case doubleTapWindowExpired
         case maxDurationReached
     }
 
     public enum Effect: Equatable, Sendable {
         case none
         case startCapture
-        /// Keep capturing, and schedule `.doubleTapWindowExpired`.
-        case armDoubleTapTimer
         case enterLocked
         case stopAndTranscribe
         /// Throw the audio away. No transcription, no paste.
         case discard
-        /// Discard any in-progress capture, then start a fresh one.
-        case restartCapture
     }
 
     public private(set) var state: State = .idle
@@ -78,12 +72,15 @@ public struct RecordingStateMachine: Sendable {
 
         // --- holding ---------------------------------------------------
         case let (.holding(downAt), .keyUp(t)):
-            if t - downAt >= thresholds.hold {
-                state = .idle
-                return .stopAndTranscribe
-            }
-            state = .awaitingSecondTap(firstUpAt: t)
-            return .armDoubleTapTimer
+            state = .idle
+            // Too brief to be a deliberate push-to-talk. Previously this armed
+            // the double-tap window; with the chord there is nothing to wait
+            // for, so it resolves immediately instead of after 300ms.
+            return t - downAt >= thresholds.hold ? .stopAndTranscribe : .discard
+
+        case (.holding, .chordPressed):
+            state = .locked
+            return .enterLocked
 
         case (.holding, .otherKeyPressed), (.holding, .escapePressed):
             state = .idle
@@ -93,34 +90,9 @@ public struct RecordingStateMachine: Sendable {
             state = .idle
             return .stopAndTranscribe
 
-        case (.holding, .keyDown), (.holding, .doubleTapWindowExpired):
-            return .none
-
-        // --- awaitingSecondTap -----------------------------------------
-        case let (.awaitingSecondTap(firstUpAt), .keyDown(t)):
-            if t - firstUpAt <= thresholds.doubleTap {
-                state = .locked
-                return .enterLocked
-            }
-            // Too late to be a double tap. The first tap's capture is still
-            // running and its audio is stale, so drop it and start fresh
-            // rather than continuing it or leaving it running underneath.
-            state = .holding(downAt: t)
-            return .restartCapture
-
-        case (.awaitingSecondTap, .doubleTapWindowExpired),
-             (.awaitingSecondTap, .otherKeyPressed),
-             (.awaitingSecondTap, .escapePressed):
-            state = .idle
-            return .discard
-
-        case (.awaitingSecondTap, .maxDurationReached):
-            // Same intent as an abandoned tap timing out: discard, don't
-            // paste a fragment just because a different timer won the race.
-            state = .idle
-            return .discard
-
-        case (.awaitingSecondTap, .keyUp):
+        // Auto-repeat while the key is held. The original `downAt` must
+        // survive, or a long hold would keep resetting to a short one.
+        case (.holding, .keyDown):
             return .none
 
         // --- locked ----------------------------------------------------
@@ -136,10 +108,11 @@ public struct RecordingStateMachine: Sendable {
             state = .idle
             return .stopAndTranscribe
 
-        // Typing while locked is expected — hands-free is deliberate.
+        // Typing while locked is expected — hands-free is deliberate. That
+        // includes Space, which is why the chord does nothing a second time.
         case (.locked, .keyUp),
-             (.locked, .otherKeyPressed),
-             (.locked, .doubleTapWindowExpired):
+             (.locked, .chordPressed),
+             (.locked, .otherKeyPressed):
             return .none
         }
     }

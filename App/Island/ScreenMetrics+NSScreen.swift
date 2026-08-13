@@ -14,10 +14,6 @@ extension NSScreen {
         )
     }
 
-    var hasNotch: Bool {
-        NotchGeometry.notchSize(for: metrics) != nil
-    }
-
     /// The screen the pointer is currently on, falling back to the main screen.
     static var active: NSScreen? {
         let mouse = NSEvent.mouseLocation

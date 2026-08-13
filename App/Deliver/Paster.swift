@@ -9,20 +9,26 @@ enum PasteOutcome {
 
 /// Delivers transcribed text into the app that had focus.
 ///
-/// Uses a clipboard round-trip rather than an Accessibility text insertion:
+/// A clipboard round-trip rather than an Accessibility text insertion:
 /// `AXUIElementSetAttributeValue` fails or corrupts state in Electron apps,
-/// terminals, and anything with a custom text engine, which is most of what
-/// people dictate into. The clipboard plus a synthetic ⌘V works everywhere.
+/// terminals, and anything with a custom text engine — most of what people
+/// dictate into. Clipboard plus a synthetic ⌘V works everywhere.
 ///
-/// The original clipboard is snapshotted at full fidelity (every UTI on every
-/// item, raw bytes) and put back afterwards — but only if nothing else wrote
-/// in the meantime. See `ClipboardGuard`.
+/// **The paste is proved, not assumed** — the text is staged as a `PastePromise`
+/// whose data-provider callback is evidence the target actually read it.
+///
+/// The original clipboard is snapshotted at full fidelity and put back
+/// afterwards — but only when the paste was consumed *and* nothing else wrote in
+/// the meantime. See `ClipboardGuard`.
 enum Paster {
 
-    /// How long the staged text stays on the clipboard before restore. Too
-    /// short and slow apps have not consumed the paste yet; too long and the
-    /// user notices their clipboard is briefly wrong.
-    private static let pasteConsumeDelay = Duration.milliseconds(150)
+    /// How long to wait for the target to ask for the promised data.
+    ///
+    /// Generous relative to the old blind 150ms wait, because this one is doing
+    /// real work: a slow app under load can take a moment to service the paste,
+    /// and concluding "not pasted" early means telling the user to press ⌘V
+    /// themselves when it was already on its way.
+    private static let consumeTimeout = Duration.milliseconds(250)
     /// Time for the reactivated app to actually become frontmost.
     private static let activateSettleDelay = Duration.milliseconds(80)
 
@@ -48,7 +54,7 @@ enum Paster {
         let targetIsSelf = focus?.bundleID == NotchVoice.bundleID
 
         guard isAccessibilityTrusted(), let focus, !targetIsSelf else {
-            copyOnly(text)
+            writePlainText(text)
             return .copiedOnly
         }
 
@@ -56,34 +62,44 @@ enum Paster {
         try? await Task.sleep(for: activateSettleDelay)
 
         let snapshot = ClipboardSnapshot.capture()
-        let changeCountAfterWrite = writeText(text)
 
-        // Optimistic: this reports that ⌘V was posted, not that the target
-        // acted on it. Nothing in the API surface can confirm the latter.
-        let pasted = sendCommandV()
-        try? await Task.sleep(for: pasteConsumeDelay)
+        let promise = PastePromise(text: text)
+        let changeCountAfterWrite = promise.write()
 
-        // Restore ONLY when ⌘V actually went out. If posting failed we return
-        // .copiedOnly, and that return value promises the caller the transcript
-        // is sitting on the clipboard for the user to paste by hand — restoring
-        // here would quietly wipe the dictation and report success at the same
-        // time, which is the worst of both.
-        if pasted, ClipboardGuard.shouldRestore(
+        guard sendCommandV() else {
+            // Posting failed outright. Leave the transcript on the clipboard as
+            // real text rather than an unresolved promise the user's next ⌘V
+            // might not be able to read.
+            writePlainText(text)
+            return .copiedOnly
+        }
+
+        let consumed = await promise.waitForConsumption(within: consumeTimeout)
+
+        guard consumed else {
+            Log.deliver.notice("No app requested the pasted data — leaving it on the clipboard")
+            // Deliberately NOT restored. The `.copiedOnly` return promises the
+            // caller that the transcript is sitting on the clipboard for the
+            // user to paste by hand; restoring here would wipe the dictation and
+            // report it as merely-copied at the same time, which is the worst of
+            // both. Re-written as plain text so it survives the promise going
+            // out of scope.
+            writePlainText(text)
+            return .copiedOnly
+        }
+
+        if ClipboardGuard.shouldRestore(
             changeCountAfterWrite: changeCountAfterWrite,
             currentChangeCount: NSPasteboard.general.changeCount
         ) {
             snapshot.restore()
         }
 
-        return pasted ? .pasted : .copiedOnly
-    }
-
-    private static func copyOnly(_ text: String) {
-        _ = writeText(text)
+        return .pasted
     }
 
     @discardableResult
-    private static func writeText(_ text: String) -> Int {
+    private static func writePlainText(_ text: String) -> Int {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
@@ -92,13 +108,11 @@ enum Paster {
 
     /// Posts ⌘V into the session event stream.
     ///
-    /// Returns whether the events were *created and posted* — NOT whether the
-    /// target consumed them. There is no such acknowledgement to read. In
-    /// particular, `CGEvent.post` silently no-ops when Accessibility is not
-    /// granted (verified: with `AXIsProcessTrusted() == false`, the source and
-    /// both events still construct fine and this returns true). That is why the
-    /// `isAccessibilityTrusted()` check in `deliver` is load-bearing rather than
-    /// advisory — it is the only place the ungranted case can be caught.
+    /// Returns whether the events were created and posted — which is *not* the
+    /// same as delivered. `CGEvent.post` silently no-ops without Accessibility,
+    /// and both events still construct fine, so this returns true either way.
+    /// That is why the `isAccessibilityTrusted()` check in `deliver` is
+    /// load-bearing rather than advisory.
     ///
     /// `flags` is assigned outright rather than OR-ed into what the source
     /// seeded, so a modifier the user happens to be holding cannot turn the
@@ -117,46 +131,5 @@ enum Paster {
         down.post(tap: .cgSessionEventTap)
         up.post(tap: .cgSessionEventTap)
         return true
-    }
-}
-
-/// Full-fidelity snapshot of the general pasteboard.
-///
-/// Stores every `(UTI, raw bytes)` pair on every item, so restoring rebuilds
-/// the complete multi-type payload — images, styled text, and file references
-/// all survive the round-trip, not just the plain-text fallback.
-struct ClipboardSnapshot {
-    private let items: [[(type: NSPasteboard.PasteboardType, data: Data)]]
-
-    static func capture() -> ClipboardSnapshot {
-        let captured = (NSPasteboard.general.pasteboardItems ?? []).map { item in
-            item.types.compactMap { type -> (NSPasteboard.PasteboardType, Data)? in
-                guard let data = item.data(forType: type) else { return nil }
-                return (type, data)
-            }
-        }
-        return ClipboardSnapshot(items: captured)
-    }
-
-    func restore() {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        guard !items.isEmpty else { return }
-
-        let rebuilt = items.map { entry -> NSPasteboardItem in
-            let item = NSPasteboardItem()
-            for (type, data) in entry {
-                item.setData(data, forType: type)
-            }
-            return item
-        }
-        // The clipboard has already been cleared at this point, so a failed
-        // write leaves the user with an empty clipboard — the exact outcome
-        // this type exists to prevent. Nothing can be done to recover it, but
-        // it must not pass silently.
-        if !pasteboard.writeObjects(rebuilt) {
-            NSLog("[NotchVoice] clipboard restore FAILED — %d item(s) lost",
-                  rebuilt.count)
-        }
     }
 }

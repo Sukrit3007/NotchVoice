@@ -41,6 +41,40 @@ public struct ScreenMetrics: Equatable, Sendable {
 /// a cutout between them.
 public enum NotchGeometry {
 
+    /// The cutout to draw when no display on this Mac has a physical one.
+    ///
+    /// A 14" MacBook Pro's, because something has to be chosen and that is the
+    /// most common notched Mac. Only reached on hardware with no built-in
+    /// notched display at all — a Mac mini or Studio driving external monitors.
+    public static let fallbackNotch = CGSize(width: 185, height: 32)
+
+    /// Which cutout a given screen should draw, and whether it is real.
+    ///
+    /// Every display draws the same silhouette; a screen with no cutout of its
+    /// own borrows the dimensions of one that has.
+    ///
+    /// Borrowing rather than hardcoding is what makes the two screens agree:
+    /// on a 16" the physical cutout is 200pt, and an external monitor beside it
+    /// drawing 185 would be visibly the wrong notch sitting next to the right
+    /// one.
+    ///
+    /// `isPhysical` is returned alongside the size because the two answers must
+    /// not be derived separately. The caller needs it for more than drawing —
+    /// a real cutout is always present, so the island only widens; a synthetic
+    /// one has to arrive and leave.
+    public static func effectiveNotch(
+        for metrics: ScreenMetrics,
+        among allScreens: [ScreenMetrics]
+    ) -> (size: CGSize, isPhysical: Bool) {
+        if let own = notchSize(for: metrics) {
+            return (own, true)
+        }
+        if let borrowed = allScreens.lazy.compactMap(notchSize).first {
+            return (borrowed, false)
+        }
+        return (fallbackNotch, false)
+    }
+
     public static func notchSize(for metrics: ScreenMetrics) -> CGSize? {
         guard metrics.safeAreaTop > 0 else { return nil }
         guard metrics.auxiliaryLeftWidth > 0, metrics.auxiliaryRightWidth > 0 else {

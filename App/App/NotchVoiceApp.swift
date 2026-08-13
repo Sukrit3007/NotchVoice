@@ -8,6 +8,7 @@ final class NotchVoiceApp: NSObject, NSApplicationDelegate {
     @MainActor private var coordinator: DictationCoordinator?
     @MainActor private var island: IslandWindowController?
     @MainActor private var menuBar: MenuBarController?
+    @MainActor private var settings: SettingsWindowController?
 
     static func main() {
         let app = NSApplication.shared
@@ -18,7 +19,7 @@ final class NotchVoiceApp: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSLog("[NotchVoice] launched")
+        Log.dictation.info("Launched")
 
         // Synchronous, not `Task { @MainActor in … }`: this method already runs
         // on the main thread, and hopping would leave a window in which the app
@@ -32,13 +33,14 @@ final class NotchVoiceApp: NSObject, NSApplicationDelegate {
             // live for the whole process here, so it would never be observed,
             // which is exactly why it would survive into a version where it is.
             coordinator.onPhaseChange = { [weak island] phase in
-                NSLog("[NotchVoice] phase: %@", String(describing: phase))
+                Log.island.debug("Phase: \(String(describing: phase), privacy: .public)")
                 if phase == .recording {
                     island?.moveToActiveScreen()
                 }
             }
 
-            let menuBar = MenuBarController(coordinator: coordinator)
+            let settings = SettingsWindowController(coordinator: coordinator)
+            let menuBar = MenuBarController(coordinator: coordinator, settings: settings)
             menuBar.install()
             island.show()
 
@@ -48,43 +50,25 @@ final class NotchVoiceApp: NSObject, NSApplicationDelegate {
                 // that raises the microphone dialog, mid-sentence.
                 let granted = await PermissionChecker.requestMicrophone()
                 if !granted {
-                    NSLog("[NotchVoice] microphone DENIED — capture will fail")
+                    Log.audio.error("Microphone DENIED — capture will fail")
                 }
                 coordinator.start()
+
+                // After start(), so the tap has been attempted: attempting one
+                // is what gets this app listed under Input Monitoring, and a
+                // Settings window that sends the user to an empty list is worse
+                // than none. Opens only when something required is missing —
+                // a working install never sees it unless asked from the menu.
+                if settings.showIfNeeded() {
+                    Log.settings.notice("Settings opened — a required permission is missing")
+                }
             }
 
             self.coordinator = coordinator
             self.island = island
             self.menuBar = menuBar
-
-            Self.printManualChecklist()
+            self.settings = settings
         }
     }
 
-    /// TEMPORARY (Task 10 harness): replaces the Task 9 tap harness. There is
-    /// no UI yet, so the phase log is the only way to see the loop run. Revert
-    /// once a human has worked through the checks below.
-    @MainActor
-    private static func printManualChecklist() {
-        let binding = BindingStore.binding.displayName
-        NSLog("[NotchVoice] --- manual checks (wait for 'model ready' first) ---")
-        NSLog("[NotchVoice] Click into TextEdit, then:")
-        NSLog("[NotchVoice]  1. hold %@, say \"hello world\", release", binding)
-        NSLog("[NotchVoice]     -> recording, transcribing, done; text appears")
-        NSLog("[NotchVoice]  2. double-tap %@, talk, tap again", binding)
-        NSLog("[NotchVoice]     -> locked, transcribing, done; text appears")
-        NSLog("[NotchVoice]  3. tap %@ once, wait", binding)
-        NSLog("[NotchVoice]     -> recording, dormant; nothing pasted")
-        NSLog("[NotchVoice]  4. hold %@, press o, release", binding)
-        NSLog("[NotchVoice]     -> recording, dormant; nothing pasted; o-slash typed")
-        NSLog("[NotchVoice]  5. hold %@, say nothing, release quickly", binding)
-        NSLog("[NotchVoice]     -> tooShort, dormant")
-        NSLog("[NotchVoice]  6. hold %@, say nothing, release after ~2s", binding)
-        NSLog("[NotchVoice]     -> error(Nothing heard); a bare \".\" must NOT be pasted")
-        NSLog("[NotchVoice]  7. hold %@, talk, press Esc", binding)
-        NSLog("[NotchVoice]     -> dormant; nothing pasted")
-        NSLog("[NotchVoice]  8. echo SENTINEL | pbcopy, dictate, then pbpaste")
-        NSLog("[NotchVoice]     -> still prints SENTINEL")
-        NSLog("[NotchVoice] --- end checks ---")
-    }
 }

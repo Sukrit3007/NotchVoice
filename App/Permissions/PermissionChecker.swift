@@ -3,23 +3,71 @@ import AppKit
 import ApplicationServices
 import IOKit.hid   // IOHIDCheckAccess — Input Monitoring status
 
-struct PermissionStatus {
+struct PermissionStatus: Equatable {
     let microphone: Bool
     let inputMonitoring: Bool
     let accessibility: Bool
 
-    /// Only microphone and input monitoring are hard requirements —
-    /// accessibility degrades to copy-only rather than breaking the app.
-    var canDictate: Bool { microphone && inputMonitoring }
-    var allGranted: Bool { microphone && inputMonitoring && accessibility }
+    /// All three are hard requirements, Accessibility included.
+    ///
+    /// macOS grants a `.listenOnly` tap on Input Monitoring alone, but a tap
+    /// that *destroys* events needs Accessibility — and the fn binding depends
+    /// on destroying the fn keypress before it opens the emoji picker. Without
+    /// this permission the hotkey does not fire at all.
+    var canDictate: Bool { microphone && inputMonitoring && accessibility }
+
+    func isGranted(_ kind: PermissionChecker.Kind) -> Bool {
+        switch kind {
+        case .microphone: microphone
+        case .inputMonitoring: inputMonitoring
+        case .accessibility: accessibility
+        }
+    }
 }
 
 enum PermissionChecker {
 
-    enum Kind {
+    enum Kind: Hashable, CaseIterable, Identifiable {
         case microphone
         case inputMonitoring
         case accessibility
+
+        var id: Self { self }
+
+        /// Copy lives here so the menu bar and the Settings window cannot drift
+        /// apart describing the same permission.
+        var title: String {
+            switch self {
+            case .microphone: "Microphone"
+            case .inputMonitoring: "Input Monitoring"
+            case .accessibility: "Accessibility"
+            }
+        }
+
+        var purpose: String {
+            switch self {
+            case .microphone: "Recording what you say."
+            case .inputMonitoring: "Noticing the key you hold to dictate."
+            // Two jobs, and the first is why it is mandatory: reserving the fn
+            // key needs a tap that can consume events, which macOS only allows
+            // with Accessibility.
+            case .accessibility: "Reserving the dictation key, and pasting at your cursor."
+            }
+        }
+
+        var whenMissing: String? {
+            self == .accessibility
+                ? "Without this, the dictation key does nothing."
+                : nil
+        }
+
+        var symbol: String {
+            switch self {
+            case .microphone: "mic.fill"
+            case .inputMonitoring: "keyboard.fill"
+            case .accessibility: "cursorarrow.rays"
+            }
+        }
 
         var settingsURL: URL {
             let base = "x-apple.systempreferences:com.apple.preference.security"

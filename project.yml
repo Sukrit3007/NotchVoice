@@ -28,10 +28,22 @@ targets:
         product: NotchVoiceCore
     settings:
       base:
+        # The shipped app is "Notch Voice" — .app filename and executable
+        # included. The target and scheme stay `NotchVoice` because those are
+        # only ever typed, never seen.
+        PRODUCT_NAME: Notch Voice
+        # Required once PRODUCT_NAME contains a space: the Swift module name is
+        # derived from the product name by default, and "Notch Voice" is not a
+        # valid identifier. Without this the build fails.
+        PRODUCT_MODULE_NAME: NotchVoice
+        # Unchanged, deliberately. Reverse-DNS identifiers do not take spaces,
+        # and this one also keys `UserDefaults` — moving it would silently reset
+        # the saved key binding and the sound preference.
         PRODUCT_BUNDLE_IDENTIFIER: com.sukrit.notchvoice
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
-        SWIFT_VERSION: "6.0"
+        # 6.2 for SE-0459 (`enumerated()` as a Collection), used by WaveformView.
+        SWIFT_VERSION: "6.2"
         # Signing must stay stable across rebuilds: TCC grants (Microphone,
         # Accessibility, Input Monitoring) are keyed to the signing identity,
         # and ad-hoc signing changes it every build, silently revoking them.

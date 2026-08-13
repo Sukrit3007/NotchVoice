@@ -15,8 +15,8 @@ enum LaunchAtLogin {
                     try SMAppService.mainApp.unregister()
                 }
             } catch {
-                NSLog("[NotchVoice] launch at login failed: %@",
-                      error.localizedDescription)
+                Log.settings.error(
+                    "Launch at login failed: \(error.localizedDescription, privacy: .public)")
             }
         }
     }

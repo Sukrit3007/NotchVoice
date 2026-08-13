@@ -1,27 +1,49 @@
-# NotchVoice
+# Notch Voice
 
 On-device voice dictation for macOS, living in the MacBook notch.
 
-Hold a modifier key, speak, release — the transcribed text is pasted into whatever text
-field had focus. Status shows in the notch, expanding and collapsing like the iPhone
-Dynamic Island. On displays without a notch it renders as a HUD matching the system volume
-meter.
+> The app is **Notch Voice**, `.app` filename and executable included. The
+> repository, Xcode target and bundle identifier stay `NotchVoice` /
+> `com.sukrit.notchvoice` — reverse-DNS identifiers do not take spaces, and that
+> identifier keys both the TCC grants and `UserDefaults`. Renaming the bundle
+> without moving the identifier turned out to preserve the permission grants.
 
-Everything runs locally. No network calls at runtime.
+Hold `fn`, speak, release — the transcribed text is tidied up and pasted into whatever text
+field had focus. Status shows in the notch, expanding and collapsing like the iPhone
+Dynamic Island, with a panel dropping out of it when there is more to say than a wing can
+hold. Every display draws the same silhouette.
+
+**Your voice never leaves your Mac.** Audio is transcribed on-device and discarded;
+transcripts are stored locally and never uploaded. There is no account, no telemetry and
+no server.
+
+The one time the app uses the network is the first launch, to fetch the speech model
+(~630MB) from Hugging Face. That is a file download and carries nothing about you. After
+it lands in `~/Library/Application Support/com.sukrit.notchvoice/Models`, the app works
+offline forever.
 
 ## Status
 
-Core dictation loop built and awaiting hardware acceptance. Hold right-Option,
-speak, release.
+Core dictation loop built and awaiting hardware acceptance.
 
-Every automated check passes — 39 unit tests, clean Release build, and the
-runtime pieces that can be measured from outside the process (window placement,
-permission state, model load, notch geometry). The acceptance matrix in the
-milestone plan has not been run yet: nothing here has been driven by a human
-speaking into a microphone. `v0.1.0` is tagged when it has.
+| | |
+|---|---|
+| Dictate | hold `fn` |
+| Hands-free | `fn`+`Space`, then `fn` again to finish |
+| Cancel | `Escape` |
 
-Next: transcript cleanup via Foundation Models (0.2.0), custom vocabulary bias
-(0.3.0), transcript history (0.4.0). See
+Every automated check passes — 65 unit tests and a clean Release build. The
+acceptance matrix in the milestone plan has not been run: nothing here has been
+driven by a human speaking into a microphone. `v0.1.0` is tagged when it has.
+
+**`fn` is reserved while the app runs.** Holding it starts a dictation instead of
+doing whatever macOS would otherwise do with the Globe key, because the event tap
+consumes it. `fn` in combination — `fn`+`Delete`, `fn`+arrows — is untouched. The
+binding can be changed to a right-hand modifier in Settings, and falls back to one
+automatically on keyboards with no `fn` key.
+
+Next: a library window (history, custom words, snippets, stats), first-run onboarding,
+and a signed `.dmg` with auto-update. See
 [`docs/superpowers/specs/2026-08-06-notch-dictation-design.md`](docs/superpowers/specs/2026-08-06-notch-dictation-design.md).
 
 ## Stack
@@ -31,9 +53,9 @@ Next: transcript cleanup via Foundation Models (0.2.0), custom vocabulary bias
 | App shell | Swift, SwiftUI, AppKit |
 | Speech-to-text | WhisperKit (CoreML / Apple Neural Engine) |
 | Transcript cleanup | Apple Foundation Models (on-device, system-provided) |
-| Hotkey | `CGEventTap`, observe-only |
+| Hotkey | `CGEventTap`, consuming — see below |
 | Text delivery | `NSPasteboard` round-trip + synthetic ⌘V |
-| History | SwiftData |
+| Feedback cues | Generated, not recorded — `Tools/SoundGen` |
 
 ## Requirements
 
@@ -46,9 +68,13 @@ Next: transcript cleanup via Foundation Models (0.2.0), custom vocabulary bias
 | Permission | Needed for | Without it |
 |---|---|---|
 | Microphone | Recording | Hard requirement |
-| Input Monitoring | Noticing the hotkey | Hotkey never fires |
-| Accessibility | Auto-paste | Falls back to copy-only |
+| Input Monitoring | Seeing the hotkey | Hotkey never fires |
+| Accessibility | Reserving the hotkey, and pasting | Hotkey never fires |
 | Apple Intelligence | Transcript cleanup | Raw transcript is pasted |
+
+Accessibility is required, not optional. A tap that only *observes* events needs
+Input Monitoring alone, but reserving `fn` means **consuming** the keypress, and
+macOS only permits that with Accessibility.
 
 ## Versioning
 

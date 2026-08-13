@@ -1,66 +1,135 @@
 import AppKit
-import Combine
 import NotchVoiceCore
+import Observation
 
-/// Wires the tap, the state machine, the recorder, transcription, and delivery
-/// into one flow. The only object that knows the whole pipeline.
+/// Wires the tap, the state machine, the recorder, transcription, polish and
+/// delivery into one flow. The only object that knows the whole pipeline.
 @MainActor
-final class DictationCoordinator: ObservableObject {
+@Observable
+final class DictationCoordinator {
 
     enum Phase: Equatable {
         case dormant
         case recording
         case locked
         case transcribing
+        /// The transcript is being tidied by the on-device model. Bounded by
+        /// `polishDeadline` — see `PolishService`.
+        case polishing
         case done
+        /// Transcribed, but only reached the clipboard — the target app never
+        /// consumed the paste. Separate from `.done` because nothing appeared at
+        /// the cursor and the user needs to know the text is on the clipboard.
+        case copied
         case tooShort
-        case error(String)
+        case error(DictationFailure)
+
+        /// The sentence to show in the panel below the notch, if this phase has
+        /// something to say that will not fit in the island's wing.
+        var panelMessage: String? {
+            switch self {
+            case let .error(failure): failure.message
+            case .tooShort: "That was too brief to transcribe. Hold the key while you speak."
+            case .copied: "Text copied. Press ⌘V to paste it where you want it."
+            default: nil
+            }
+        }
+    }
+
+    /// Whether a dictation could start at all, as distinct from what one is
+    /// doing right now.
+    ///
+    /// A phase is transient; "Input Monitoring was never granted" is not.
+    /// Permanent conditions belong to Settings — the island only tints its
+    /// resting glyph to say something is wrong.
+    enum Readiness: Equatable {
+        /// ~12s at launch. Dictation fails until it finishes.
+        case loadingModel
+        case ready
+        case needsPermission
+        case modelUnavailable(String)
+
+        var canDictate: Bool { self == .ready }
     }
 
     /// Below this, there is not enough audio to transcribe usefully.
     ///
-    /// Tied to the hold threshold rather than set independently. As two free
-    /// literals — hold 0.4, minimum 0.5 — every press lasting between them was
-    /// accepted by the state machine as a deliberate push-to-talk and then
-    /// binned by this guard, so a quick but intentional press recorded, showed
-    /// "Too short" for 900ms, and pasted nothing. Observed in practice: a real
-    /// press measured 0.427s and vanished. The machine decides what counts as
-    /// a hold; anything it accepts must be long enough to transcribe.
+    /// Derived from the hold threshold, not set independently: anything the
+    /// state machine accepts as a deliberate hold must be long enough to
+    /// transcribe, or it is accepted and then binned.
     private static var minimumDuration: TimeInterval { thresholds.hold }
     /// Locked sessions would otherwise run unbounded. Spec §5.
     private static let maximumDuration: TimeInterval = 300
-    /// How many bars the waveform shows.
-    private static let waveformBarCount = 28
+    /// Ring buffer capacity. One slot per bar, so this must match the view —
+    /// and the wing that holds them is sized in Core, where a test checks it.
+    private static let waveformBarCount = IslandMetrics.waveformBarCount
+
+    /// Level below which a take will not transcribe.
+    ///
+    /// Levels arrive pre-scaled as `min(rms * 4, 1)` (MicRecorder). Measured on
+    /// real takes: failures came in at 0.031 and 0.060, successes at 0.310 and
+    /// 0.564. This floor sits in that gap.
+    private static let quietFloor: Float = 0.12
+
+    /// How long to listen before deciding a take is too quiet.
+    ///
+    /// Load-bearing: `LevelBuffer` starts zero-padded, so without this the
+    /// warning fires on the first frame of every dictation.
+    private static let quietGrace: TimeInterval = 0.8
+
     /// How long a terminal phase stays on screen before collapsing.
     private static let doneDwell = Duration.milliseconds(900)
+    /// Longer than `doneDwell` because these phases put a sentence in the panel,
+    /// and a sentence has to be readable before it leaves.
     private static let errorDwell = Duration.seconds(4)
-    /// One source of truth for the gesture windows: the machine decides whether
-    /// a second tap was in time, and the timer below decides when to tell it the
-    /// window closed. Two literals would drift apart silently.
+
+    /// How long the polish step may take before the raw transcript is delivered.
+    ///
+    /// A guess, not a measurement. Tune against real dictations: too low and
+    /// polish never lands, too high and every dictation pays for it.
+    private static let polishDeadline = Duration.milliseconds(400)
+
+    /// One source of truth for the gesture window.
     private static let thresholds = RecordingStateMachine.Thresholds()
 
-    @Published private(set) var phase: Phase = .dormant
-    @Published private(set) var levels: [Float]
+    // The four properties a view reads. Everything below is `@ObservationIgnored`
+    // so that bumping a session counter or swapping a timer does not invalidate
+    // the island.
+    private(set) var phase: Phase = .dormant
+    private(set) var readiness: Readiness = .loadingModel
+    private(set) var levels: [Float]
+    /// True once the microphone has been reading near-silence for long enough
+    /// that this take will not transcribe. Surfaced while the user can still do
+    /// something about it, rather than as "Didn't hear anything" after the fact.
+    private(set) var inputTooQuiet = false
 
-    var onPhaseChange: ((Phase) -> Void)?
+    @ObservationIgnored var onPhaseChange: ((Phase) -> Void)?
 
-    private var machine: RecordingStateMachine
-    private let recorder = MicRecorder()
-    private let transcriber = WhisperKitService()
-    private var tap: ModifierTap?
+    /// Fired on every binding key-down, alongside normal dispatch. Settings'
+    /// live test is the only consumer — an event arriving here is proof the tap
+    /// is delivering, which `IOHIDCheckAccess` cannot tell us.
+    @ObservationIgnored var onBindingKeyDown: (() -> Void)?
 
-    private var buffer: LevelBuffer
-    private var focus: FocusSnapshot?
-    private var doubleTapTimer: Task<Void, Never>?
-    private var maxDurationTimer: Task<Void, Never>?
-    private var collapseTask: Task<Void, Never>?
+    @ObservationIgnored private var machine: RecordingStateMachine
+    @ObservationIgnored private let recorder = MicRecorder()
+    @ObservationIgnored private let transcriber = WhisperKitService()
+    @ObservationIgnored private let polisher = PolishService()
+    @ObservationIgnored private var tap: ModifierTap?
 
-    /// Bumped on every capture. Transcription is async and the state machine has
-    /// no transcribing state, so a second dictation can begin while the first is
-    /// still decoding; the late result must not stamp `.done` over the phase of
-    /// the recording that is now in progress. Its text is still delivered — the
-    /// user said those words — only the phase update is dropped.
-    private var session = 0
+    @ObservationIgnored private var buffer: LevelBuffer
+    @ObservationIgnored private var focus: FocusSnapshot?
+    @ObservationIgnored private var maxDurationTimer: Task<Void, Never>?
+    @ObservationIgnored private var collapseTask: Task<Void, Never>?
+
+    /// Mirrors `WhisperKitService.isReady`, which is actor-isolated and so
+    /// cannot be read from a synchronous path like `armTap()`.
+    @ObservationIgnored private var modelLoaded = false
+
+    /// Bumped on every capture. A second dictation can begin while the first is
+    /// still decoding, and the late result must not stamp `.done` over the
+    /// recording now in progress. Its text is still delivered — the user said
+    /// those words — only the phase update is dropped.
+    @ObservationIgnored private var session = 0
 
     init() {
         let buffer = LevelBuffer(capacity: Self.waveformBarCount)
@@ -76,55 +145,125 @@ final class DictationCoordinator: ObservableObject {
             guard let self else { return }
             buffer.append(level)
             levels = buffer.levels
+
+            // Gated on elapsed time, not on the buffer alone: LevelBuffer is
+            // zero-padded from construction, so "every level is low" is true
+            // for the first second of every take regardless of the speaker.
+            guard recorder.duration >= Self.quietGrace else {
+                inputTooQuiet = false
+                return
+            }
+            inputTooQuiet = (buffer.levels.max() ?? 0) < Self.quietFloor
         }
 
-        let binding = BindingStore.binding
-        NSLog("[NotchVoice] binding: %@ (keycode %d)",
-              binding.displayName, Int(binding.rawValue))
+        Cues.prewarm()
+
+        guard armTap() else {
+            // Not a crash and not a hang: nothing can trigger a dictation, so
+            // loading a 632MB model would be a waste. Settings owns the recovery
+            // from here.
+            Log.dictation.notice("Skipping model load: nothing can trigger a dictation")
+            return
+        }
+
+        loadModel()
+        Task { await polisher.prepare() }
+    }
+
+    /// Creates the event tap and reports whether it can actually deliver events.
+    ///
+    /// Separate from `start()` and safe to call again, because Settings needs
+    /// to retry it the moment a permission is granted — and again on every
+    /// rebind.
+    @discardableResult
+    func armTap() -> Bool {
+        tap?.stop()
+        tap = nil
+
+        // Resolved, not taken as stored: an external non-Apple keyboard has no
+        // fn key, and binding to a key that cannot be pressed is an app that
+        // looks fine and does nothing.
+        let stored = BindingStore.binding
+        let binding = KeyboardCapabilities.resolve(stored)
+        if binding != stored { BindingStore.binding = binding }
+
+        Log.input.info(
+            "Binding: \(binding.displayName, privacy: .public) (keycode \(binding.rawValue, privacy: .public))")
 
         let tap = ModifierTap(binding: binding)
-        tap.onKeyDown = { [weak self] in self?.dispatch(.keyDown(at: Self.now())) }
+        tap.onKeyDown = { [weak self] in
+            guard let self else { return }
+            onBindingKeyDown?()
+            dispatch(.keyDown(at: Self.now()))
+        }
         tap.onKeyUp = { [weak self] in self?.dispatch(.keyUp(at: Self.now())) }
-        // Both of these fire far beyond our own gesture — `onEscape` on every
-        // Escape anywhere in the system, `onOtherKey` on modifier traffic that
-        // only means interference while the binding is held. Dropping them when
-        // idle keeps the log readable; the machine ignores them there anyway.
+        tap.onChord = { [weak self] in self?.dispatchIfActive(.chordPressed) }
+        // Both of these fire far beyond our own gesture. Dropping them when idle
+        // keeps the log readable; the machine ignores them there anyway.
         tap.onOtherKey = { [weak self] in self?.dispatchIfActive(.otherKeyPressed) }
         tap.onEscape = { [weak self] in self?.dispatchIfActive(.escapePressed) }
 
         guard tap.start() else {
-            // Not a crash and not a hang. ModifierTap returns false only when
-            // Input Monitoring is ungranted, and there is no way to arm later
-            // without a relaunch, so say so instead of sitting there dead.
-            NSLog("[NotchVoice] tap did NOT arm — Input Monitoring is not granted.")
-            NSLog("[NotchVoice] Grant it in System Settings > Privacy & Security >")
-            NSLog("[NotchVoice] Input Monitoring, then relaunch this binary.")
-            NSLog("[NotchVoice] Skipping model load: nothing can trigger a dictation.")
-            setPhase(.error("Input Monitoring permission needed"))
-            return
+            Log.input.error("Tap did NOT arm — Accessibility or Input Monitoring is missing")
+            readiness = .needsPermission
+            return false
         }
+
         self.tap = tap
-        NSLog("[NotchVoice] tap armed")
-
-        if !Paster.isAccessibilityTrusted() {
-            // Not fatal: Paster falls back to leaving the transcript on the
-            // clipboard. Logged because "text did not appear at the cursor" is
-            // otherwise indistinguishable from a broken pipeline.
-            NSLog("[NotchVoice] Accessibility NOT granted — transcripts will be")
-            NSLog("[NotchVoice] copied to the clipboard instead of pasted.")
+        Log.input.info("Tap armed")
+        // Deliberately not `.ready`: the tap is only half of it, and the model
+        // may still be 12 seconds from transcribing anything.
+        if readiness == .needsPermission {
+            readiness = modelLoaded ? .ready : .loadingModel
         }
+        return true
+    }
 
+    /// Changes the dictation key and re-arms the tap against it.
+    ///
+    /// Not `BindingStore.binding = key; armTap()` at the call site: `armTap()`
+    /// tears the old tap down, and if the old key is *held* at that moment its
+    /// `keyUp` never arrives — the machine strands in `.holding`, the recorder
+    /// keeps running, and the next press reads as a release. The in-flight
+    /// gesture has to be abandoned first, and `machine` is private.
+    ///
+    /// The session counter is left alone: a transcription already in flight
+    /// still delivers its text. Only the gesture is cancelled.
+    @discardableResult
+    func rebind(to key: ModifierKey) -> Bool {
+        cancelTimers()
+        collapseTask?.cancel()
+        recorder.discard()
+        machine = RecordingStateMachine(thresholds: Self.thresholds)
+        resetWaveform()
+        setPhase(.dormant)
+
+        BindingStore.binding = key
+        Log.input.info("Rebound to \(key.displayName, privacy: .public)")
+        return armTap()
+    }
+
+    /// Loads the speech model. No-ops if it is already resident.
+    func loadModel() {
         Task {
             let startedAt = Self.now()
-            NSLog("[NotchVoice] loading model… (~12s; dictation is unavailable until ready)")
+            Log.dictation.info("Loading model… (~12s; dictation is unavailable until ready)")
             do {
                 try await transcriber.prepare { _ in }
-                NSLog("[NotchVoice] model ready in %.1fs", Self.now() - startedAt)
+                Log.dictation.info("Model ready in \(Self.now() - startedAt, privacy: .public)s")
+                modelLoaded = true
+                if readiness != .needsPermission { readiness = .ready }
             } catch {
-                NSLog("[NotchVoice] model FAILED to load: %@", error.localizedDescription)
-                setPhase(.error("Model failed to load: \(error.localizedDescription)"))
+                Log.dictation.error(
+                    "Model FAILED to load: \(error.localizedDescription, privacy: .public)")
+                readiness = .modelUnavailable(error.localizedDescription)
             }
         }
+    }
+
+    /// Whether the on-device cleanup model can run. Surfaced in Settings.
+    nonisolated var polishAvailability: PolishAvailability {
+        polisher.availability
     }
 
     private static func now() -> TimeInterval {
@@ -133,10 +272,8 @@ final class DictationCoordinator: ObservableObject {
 
     private func dispatch(_ event: RecordingStateMachine.Event) {
         let effect = machine.handle(event)
-        NSLog("[NotchVoice] %@ -> %@ (state: %@)",
-              String(describing: event),
-              String(describing: effect),
-              String(describing: machine.state))
+        Log.dictation.debug(
+            "\(String(describing: event), privacy: .public) -> \(String(describing: effect), privacy: .public) (state: \(String(describing: self.machine.state), privacy: .public))")
         apply(effect)
     }
 
@@ -154,20 +291,9 @@ final class DictationCoordinator: ObservableObject {
         case .startCapture:
             beginCapture()
 
-        case .restartCapture:
-            // A second tap arrived too late to lock, so the first tap's audio
-            // is stale. Drop it before starting over — MicRecorder.start()
-            // no-ops while already running, so without this the stale samples
-            // would be prepended to the new dictation and pasted.
-            recorder.discard()
-            beginCapture()
-
-        case .armDoubleTapTimer:
-            armDoubleTapTimer()
-
         case .enterLocked:
-            cancelDoubleTapTimer()
             setPhase(.locked)
+            Cues.play(.lock)
 
         case .stopAndTranscribe:
             cancelTimers()
@@ -188,35 +314,40 @@ final class DictationCoordinator: ObservableObject {
         focus = FocusSnapshot.capture()
         resetWaveform()
 
+        armMaxDurationTimer()
+
         do {
             try recorder.start()
         } catch {
-            NSLog("[NotchVoice] recorder failed to start: %@", String(describing: error))
-            setPhase(.error("Microphone unavailable"))
-            scheduleCollapse(after: Self.errorDwell)
+            Log.audio.error(
+                "Recorder failed to start: \(String(describing: error), privacy: .public)")
+            fail(with: .noMicrophone)
             return
         }
 
+        // On the key-down itself, with no settling delay: the tap consumes fn,
+        // so it cannot compose a character the island would flash on.
         setPhase(.recording)
-        armMaxDurationTimer()
+        Cues.play(.start)
     }
 
     private func finishAndTranscribe() {
         let duration = recorder.duration
         let samples = recorder.stop()
-        resetWaveform()
 
-        // Peak and RMS are logged alongside the sample count because "Nothing
-        // heard" has two completely different causes that look identical from
-        // outside: the user did not speak, or the microphone captured silence
-        // while they did. A peak near zero means no signal ever arrived and
-        // the problem is the input device or its volume, not the model.
+        // The meter is deliberately NOT cleared — it holds its last frame and
+        // dims. See `WaveformView.dimmed`.
+
+        // Peak and RMS separate the two causes of a silent take, which look
+        // identical from outside: the user did not speak, or the microphone
+        // captured silence while they did. A peak near zero means no signal ever
+        // arrived, so the problem is the input device rather than the model.
         let peak = samples.reduce(0 as Float) { max($0, abs($1)) }
         let rms = LevelBuffer.rms(samples)
-        NSLog("[NotchVoice] captured %.2fs, %d samples (%.2fs of audio), peak %.4f rms %.4f",
-              duration, samples.count, Double(samples.count) / 16_000, peak, rms)
+        Log.audio.info(
+            "Captured \(duration, privacy: .public)s, \(samples.count, privacy: .public) samples, peak \(peak, privacy: .public) rms \(rms, privacy: .public)")
         if peak < 0.01 {
-            NSLog("[NotchVoice] audio is effectively SILENT — check the input device and its volume")
+            Log.audio.notice("Audio is effectively SILENT — check the input device and its volume")
         }
 
         guard duration >= Self.minimumDuration else {
@@ -226,43 +357,55 @@ final class DictationCoordinator: ObservableObject {
         }
 
         setPhase(.transcribing)
+        // After the minimum-duration guard, so a too-short take stays silent.
+        // Decoding runs for a second or two and the loop needs a sound in it.
+        Cues.play(.stop)
         let target = focus
         let session = self.session
 
         Task {
             let startedAt = Self.now()
             do {
-                let text = try await transcriber.transcribe(samples)
-                NSLog("[NotchVoice] transcribed in %.2fs: \"%@\"",
-                      Self.now() - startedAt, text)
+                let raw = try await transcriber.transcribe(samples)
+                // `.private` on the transcript, public on its shape: the log is
+                // readable by anything that can run `log show`. See `Log`.
+                Log.dictation.info(
+                    "Transcribed in \(Self.now() - startedAt, privacy: .public)s: \(raw, privacy: .private)")
 
                 // Silence does NOT come back empty. Measured: a take with no
-                // speech transcribes as ".", which sails past the service's
+                // speech transcribes as ".", which passes the service's
                 // is-it-empty check and would be pasted into the user's
-                // document. Anything with no letter and no digit in it is not
-                // something the user said, so it is never delivered.
-                guard Self.hasSpeech(text) else {
-                    NSLog("[NotchVoice] no alphanumeric content — treating as silence, not pasting")
-                    finish(session, with: .error("Nothing heard"), dwell: Self.errorDwell)
+                // document.
+                guard Self.hasSpeech(raw) else {
+                    Log.dictation.notice("No alphanumeric content — treating as silence")
+                    finish(session, with: .error(.silent), dwell: Self.errorDwell)
                     return
                 }
 
+                // Only the live dictation shows a polishing state; a late one
+                // still polishes and delivers, it just does not touch the island.
+                if session == self.session { setPhase(.polishing) }
+                let text = await polisher.polish(raw, within: Self.polishDeadline)
+
                 let outcome = await Paster.deliver(text, to: target)
-                NSLog("[NotchVoice] delivery: %@ (target %@)",
-                      String(describing: outcome), target?.bundleID ?? "none")
-                finish(session, with: .done, dwell: Self.doneDwell)
+                Log.deliver.info(
+                    "Delivery: \(String(describing: outcome), privacy: .public) (target \(target?.bundleID ?? "none", privacy: .public))")
+                finish(session,
+                       with: outcome == .pasted ? .done : .copied,
+                       dwell: outcome == .pasted ? Self.doneDwell : Self.errorDwell)
             } catch TranscriptionError.empty {
-                NSLog("[NotchVoice] transcription empty")
-                finish(session, with: .error("Nothing heard"), dwell: Self.errorDwell)
+                Log.dictation.notice("Transcription empty")
+                finish(session, with: .error(.silent), dwell: Self.errorDwell)
             } catch TranscriptionError.notReady {
                 // The model takes ~12s to load at launch; a hotkey pressed in
                 // that window lands here. The audio is gone, but nothing hangs
                 // and the next dictation works.
-                NSLog("[NotchVoice] model not ready yet — dictation dropped")
-                finish(session, with: .error("Still loading model…"), dwell: Self.errorDwell)
+                Log.dictation.notice("Model not ready yet — dictation dropped")
+                finish(session, with: .error(.modelLoading), dwell: Self.errorDwell)
             } catch {
-                NSLog("[NotchVoice] transcription failed: %@", String(describing: error))
-                finish(session, with: .error(error.localizedDescription), dwell: Self.errorDwell)
+                Log.dictation.error(
+                    "Transcription failed: \(String(describing: error), privacy: .public)")
+                finish(session, with: .error(.transcriptionFailed), dwell: Self.errorDwell)
             }
         }
     }
@@ -270,12 +413,21 @@ final class DictationCoordinator: ObservableObject {
     /// Applies a terminal phase, unless a newer dictation has already started.
     private func finish(_ session: Int, with phase: Phase, dwell: Duration) {
         guard session == self.session else {
-            NSLog("[NotchVoice] session %d finished late (now %d) — phase left alone",
-                  session, self.session)
+            Log.dictation.notice(
+                "Session \(session, privacy: .public) finished late (now \(self.session, privacy: .public)) — phase left alone")
             return
         }
         setPhase(phase)
+        // Only success is sounded. A failed dictation is announced by the panel
+        // dropping out of the notch instead.
+        if phase == .done || phase == .copied { Cues.play(.done) }
         scheduleCollapse(after: dwell)
+    }
+
+    /// Shows a failure immediately, outside the async pipeline.
+    private func fail(with failure: DictationFailure) {
+        setPhase(.error(failure))
+        scheduleCollapse(after: Self.errorDwell)
     }
 
     /// Whisper punctuates silence rather than returning nothing, so emptiness
@@ -288,15 +440,6 @@ final class DictationCoordinator: ObservableObject {
 
     // MARK: - Timers
 
-    private func armDoubleTapTimer() {
-        cancelDoubleTapTimer()
-        doubleTapTimer = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(Self.thresholds.doubleTap))
-            guard !Task.isCancelled else { return }
-            self?.dispatch(.doubleTapWindowExpired)
-        }
-    }
-
     private func armMaxDurationTimer() {
         maxDurationTimer?.cancel()
         maxDurationTimer = Task { [weak self] in
@@ -306,13 +449,7 @@ final class DictationCoordinator: ObservableObject {
         }
     }
 
-    private func cancelDoubleTapTimer() {
-        doubleTapTimer?.cancel()
-        doubleTapTimer = nil
-    }
-
     private func cancelTimers() {
-        cancelDoubleTapTimer()
         maxDurationTimer?.cancel()
         maxDurationTimer = nil
     }
@@ -331,10 +468,15 @@ final class DictationCoordinator: ObservableObject {
     private func resetWaveform() {
         buffer.reset()
         levels = buffer.levels
+        inputTooQuiet = false
     }
 
     private func setPhase(_ next: Phase) {
         phase = next
+        // The tap suppresses Escape only while something is actually running.
+        // Taking it the rest of the time would break Escape everywhere on the
+        // Mac for an app that is doing nothing.
+        tap?.isDictating = next != .dormant
         onPhaseChange?(next)
     }
 }

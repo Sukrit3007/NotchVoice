@@ -15,6 +15,16 @@ struct NotchGeometryTests {
         )
     }
 
+    /// 14" MacBook Pro, measured off the machine this runs on.
+    private var macBookPro14: ScreenMetrics {
+        ScreenMetrics(
+            frameWidth: 1512, frameHeight: 982,
+            originX: 0, originY: 0,
+            safeAreaTop: 32,
+            auxiliaryLeftWidth: 663.5, auxiliaryRightWidth: 663.5
+        )
+    }
+
     /// External monitor: no safe-area inset, no auxiliary areas.
     private var externalMonitor: ScreenMetrics {
         ScreenMetrics(
@@ -70,6 +80,65 @@ struct NotchGeometryTests {
     @Test("an external monitor has no notch rect")
     func externalMonitorHasNoRect() {
         #expect(NotchGeometry.notchRect(for: externalMonitor) == nil)
+    }
+
+    // MARK: - Which cutout a screen draws
+
+    @Test("a notched screen draws its own cutout")
+    func physicalScreenUsesItsOwn() {
+        let result = NotchGeometry.effectiveNotch(
+            for: macBookPro, among: [macBookPro, externalMonitor]
+        )
+        #expect(result.size == CGSize(width: 200, height: 32))
+        #expect(result.isPhysical)
+    }
+
+    @Test("an external monitor borrows the built-in display's cutout")
+    func externalBorrowsFromTheLaptop() {
+        // The point of borrowing rather than hardcoding: both screens have to
+        // show the same notch, and the laptop's is whatever it is.
+        let result = NotchGeometry.effectiveNotch(
+            for: externalMonitor, among: [macBookPro14, externalMonitor]
+        )
+        #expect(result.size == CGSize(width: 185, height: 32))
+        #expect(!result.isPhysical)
+    }
+
+    @Test("the borrowed cutout tracks a 16-inch laptop too")
+    func borrowedSizeFollowsTheLaptop() {
+        // Same external monitor, different Mac: 200 rather than 185. A
+        // hardcoded synthetic notch would sit visibly wrong beside this one.
+        let result = NotchGeometry.effectiveNotch(
+            for: externalMonitor, among: [macBookPro, externalMonitor]
+        )
+        #expect(result.size == CGSize(width: 200, height: 32))
+        #expect(!result.isPhysical)
+    }
+
+    @Test("with no notched display anywhere, the fallback is used")
+    func fallbackWhenNothingHasANotch() {
+        // A Mac mini or Studio driving external monitors.
+        let second = ScreenMetrics(
+            frameWidth: 3440, frameHeight: 1440,
+            originX: 2560, originY: 0,
+            safeAreaTop: 0,
+            auxiliaryLeftWidth: 0, auxiliaryRightWidth: 0
+        )
+        let result = NotchGeometry.effectiveNotch(
+            for: externalMonitor, among: [externalMonitor, second]
+        )
+        #expect(result.size == NotchGeometry.fallbackNotch)
+        #expect(!result.isPhysical)
+    }
+
+    @Test("a screen absent from the list still resolves")
+    func screenNotInTheListIsHandled() {
+        // Guards the ordering assumption rather than a scenario: the caller
+        // passes NSScreen.screens, and a display can be disconnected between
+        // that snapshot and this call.
+        let result = NotchGeometry.effectiveNotch(for: externalMonitor, among: [])
+        #expect(result.size == NotchGeometry.fallbackNotch)
+        #expect(!result.isPhysical)
     }
 
     @Test("the notch rect uses the left auxiliary edge, not the frame centre")

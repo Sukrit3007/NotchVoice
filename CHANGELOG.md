@@ -9,15 +9,54 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- Hold right-Option to dictate; release to transcribe and paste at the cursor.
-- Double-tap to lock a hands-free session; tap again to finish.
+- Hold `fn` to dictate; release to transcribe and paste at the cursor.
+- `fn`+`Space` locks a hands-free session; `fn` again to finish.
+- Transcripts are tidied up on-device (Apple Foundation Models) before pasting,
+  under a deadline — past it the raw transcript is delivered rather than the
+  paste being held up.
+- A panel drops out of the notch to explain a failure in a full sentence, which
+  the island's wing has never had room for.
+- VoiceOver support for the island and the panel.
+- An app icon — 🗣️ on a white rounded-rect. The app had none, which showed as a
+  grey placeholder in the Privacy & Security lists it sends you to.
+- The app is now called **Notch Voice** — display name, `.app` filename and
+  executable. The bundle identifier stays `com.sukrit.notchvoice`: reverse-DNS
+  identifiers do not take spaces, and it keys both the TCC grants and the saved
+  preferences. Renaming the bundle around a stable identifier kept the
+  Microphone, Accessibility and Input Monitoring grants intact.
 - Status UI in the MacBook notch, with a system-HUD-style fallback on displays
   without one.
 - Live waveform driven by real microphone amplitude.
 - On-device transcription via WhisperKit, model resident for instant starts.
 - Clipboard-safe delivery — the original clipboard is restored unless something
   else wrote to it during the paste.
-- Copy-only fallback when Accessibility has not been granted.
+- The paste is verified rather than assumed: the text is staged as a pasteboard
+  promise, so "Done" now means an app actually read it, and "⌘V" means it did not.
+
+### Changed
+
+- The event tap consumes the events it owns, where it previously only observed.
+  This is what reserves `fn` — without it, holding the Globe key would also open
+  the emoji picker on most Macs. It takes exactly three things: `fn` itself,
+  `Space` while `fn` is held, and `Escape` during a dictation.
+- **Accessibility is now required.** A consuming tap needs it, so without it the
+  hotkey does nothing at all — where before it degraded to copy-only.
+- The island appears the instant the key goes down. The old 150ms delay existed
+  because right-⌥ also types `ø`; `fn` types nothing, so it was pure latency.
+- Feedback cues replaced. Sounds are Wispr Flow's `v12` set, used directly —
+  **these are third-party assets and must be replaced before any distribution.**
+  `Tone` stays in Core, unused, so regenerating an original set is a small job.
+- Transcripts are no longer written to the system log in the clear. Logging moved
+  from `NSLog` to `os.Logger`, and anything derived from speech is `.private`.
+- Menu bar glyph is 🗣️, and ⚠️ when a permission is missing or the model failed.
+  Emoji cannot carry a badge the way `waveform.badge.exclamationmark` did, so the
+  whole glyph swaps instead — the always-visible warning survives, by a different
+  mechanism.
+
+### Removed
+
+- The failure sound. Wispr Flow's dictation set has none; the panel says it
+  instead.
 - Menu bar item showing permission state, with links into System Settings.
 - Launch at login.
 - Design spec for the notch-based dictation app.

@@ -6,10 +6,20 @@
     <string>en</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
     <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <!-- The user-facing name has a space; the bundle identifier, the executable
+         and the .app filename deliberately do not. TCC grants (Microphone,
+         Accessibility, Input Monitoring) are keyed to the bundle identifier and
+         signature, and this app now consumes keystrokes — losing those grants
+         means losing the hotkey entirely. Renaming the product would be a
+         cosmetic change with a real cost, so only these two keys move. -->
     <key>CFBundleName</key>
-    <string>$(PRODUCT_NAME)</string>
+    <string>Notch Voice</string>
+    <key>CFBundleDisplayName</key>
+    <string>Notch Voice</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>

@@ -4,6 +4,15 @@ import Testing
 @Suite("RecordingStateMachine")
 struct RecordingStateMachineTests {
 
+    /// Drives a machine into `.locked` the way the tap does: key down, then
+    /// Space while it is still held.
+    private func locked() -> RecordingStateMachine {
+        var sm = RecordingStateMachine()
+        _ = sm.handle(.keyDown(at: 0))
+        _ = sm.handle(.chordPressed)
+        return sm
+    }
+
     @Test("key down starts capture")
     func keyDownStartsCapture() {
         var sm = RecordingStateMachine()
@@ -19,39 +28,52 @@ struct RecordingStateMachineTests {
         #expect(sm.state == .idle)
     }
 
-    @Test("a quick tap waits for a second tap instead of transcribing")
-    func quickTapArmsTimer() {
+    @Test("holding exactly at the threshold transcribes")
+    func holdAtExactThresholdTranscribes() {
         var sm = RecordingStateMachine()
         _ = sm.handle(.keyDown(at: 0))
-        #expect(sm.handle(.keyUp(at: 0.1)) == .armDoubleTapTimer)
-        #expect(sm.state == .awaitingSecondTap(firstUpAt: 0.1))
-    }
-
-    @Test("double tap within the window locks")
-    func doubleTapLocks() {
-        var sm = RecordingStateMachine()
-        _ = sm.handle(.keyDown(at: 0))
-        _ = sm.handle(.keyUp(at: 0.1))
-        #expect(sm.handle(.keyDown(at: 0.3)) == .enterLocked)
-        #expect(sm.state == .locked)
-    }
-
-    @Test("a single tap with no follow-up is discarded")
-    func singleTapDiscards() {
-        var sm = RecordingStateMachine()
-        _ = sm.handle(.keyDown(at: 0))
-        _ = sm.handle(.keyUp(at: 0.1))
-        #expect(sm.handle(.doubleTapWindowExpired) == .discard)
+        // 0.4 - 0 is exact in floating point, so this pins the >= boundary.
+        #expect(sm.handle(.keyUp(at: 0.4)) == .stopAndTranscribe)
         #expect(sm.state == .idle)
     }
 
-    @Test("a second tap arriving too late starts a fresh hold")
-    func lateSecondTapRestarts() {
+    @Test("a tap too short to be a hold is discarded immediately")
+    func shortTapDiscards() {
         var sm = RecordingStateMachine()
         _ = sm.handle(.keyDown(at: 0))
-        _ = sm.handle(.keyUp(at: 0.1))
-        #expect(sm.handle(.keyDown(at: 5.0)) == .restartCapture)
-        #expect(sm.state == .holding(downAt: 5.0))
+        // No double-tap window to wait out any more: this resolves on the
+        // release rather than 300ms later.
+        #expect(sm.handle(.keyUp(at: 0.1)) == .discard)
+        #expect(sm.state == .idle)
+    }
+
+    @Test("the chord locks hands-free")
+    func chordLocks() {
+        var sm = RecordingStateMachine()
+        _ = sm.handle(.keyDown(at: 0))
+        #expect(sm.handle(.chordPressed) == .enterLocked)
+        #expect(sm.state == .locked)
+    }
+
+    @Test("releasing the key after the chord does not end the session")
+    func keyUpAfterLockIsIgnored() {
+        var sm = locked()
+        #expect(sm.handle(.keyUp(at: 0.4)) == .none)
+        #expect(sm.state == .locked)
+    }
+
+    @Test("tapping the key while locked stops and transcribes")
+    func tapWhileLockedStops() {
+        var sm = locked()
+        #expect(sm.handle(.keyDown(at: 9.0)) == .stopAndTranscribe)
+        #expect(sm.state == .idle)
+    }
+
+    @Test("the chord arriving again while locked is ignored")
+    func chordWhileLockedIsIgnored() {
+        var sm = locked()
+        #expect(sm.handle(.chordPressed) == .none)
+        #expect(sm.state == .locked)
     }
 
     @Test("pressing another key while held cancels silently")
@@ -62,6 +84,13 @@ struct RecordingStateMachineTests {
         #expect(sm.state == .idle)
     }
 
+    @Test("typing while locked does not cancel — locked is deliberate")
+    func otherKeyWhileLockedIsIgnored() {
+        var sm = locked()
+        #expect(sm.handle(.otherKeyPressed) == .none)
+        #expect(sm.state == .locked)
+    }
+
     @Test("escape while holding cancels")
     func escapeWhileHoldingCancels() {
         var sm = RecordingStateMachine()
@@ -70,42 +99,9 @@ struct RecordingStateMachineTests {
         #expect(sm.state == .idle)
     }
 
-    @Test("tapping the key while locked stops and transcribes")
-    func tapWhileLockedStops() {
-        var sm = RecordingStateMachine()
-        _ = sm.handle(.keyDown(at: 0))
-        _ = sm.handle(.keyUp(at: 0.1))
-        _ = sm.handle(.keyDown(at: 0.3))
-        #expect(sm.handle(.keyDown(at: 9.0)) == .stopAndTranscribe)
-        #expect(sm.state == .idle)
-    }
-
-    @Test("the key release that follows a locking tap is ignored")
-    func keyUpAfterLockIsIgnored() {
-        var sm = RecordingStateMachine()
-        _ = sm.handle(.keyDown(at: 0))
-        _ = sm.handle(.keyUp(at: 0.1))
-        _ = sm.handle(.keyDown(at: 0.3))
-        #expect(sm.handle(.keyUp(at: 0.4)) == .none)
-        #expect(sm.state == .locked)
-    }
-
-    @Test("typing while locked does not cancel — locked is deliberate")
-    func otherKeyWhileLockedIsIgnored() {
-        var sm = RecordingStateMachine()
-        _ = sm.handle(.keyDown(at: 0))
-        _ = sm.handle(.keyUp(at: 0.1))
-        _ = sm.handle(.keyDown(at: 0.3))
-        #expect(sm.handle(.otherKeyPressed) == .none)
-        #expect(sm.state == .locked)
-    }
-
     @Test("escape while locked cancels")
     func escapeWhileLockedCancels() {
-        var sm = RecordingStateMachine()
-        _ = sm.handle(.keyDown(at: 0))
-        _ = sm.handle(.keyUp(at: 0.1))
-        _ = sm.handle(.keyDown(at: 0.3))
+        var sm = locked()
         #expect(sm.handle(.escapePressed) == .discard)
         #expect(sm.state == .idle)
     }
@@ -120,67 +116,29 @@ struct RecordingStateMachineTests {
 
     @Test("hitting the duration cap while locked transcribes")
     func maxDurationWhileLockedTranscribes() {
-        var sm = RecordingStateMachine()
-        _ = sm.handle(.keyDown(at: 0))
-        _ = sm.handle(.keyUp(at: 0.1))
-        _ = sm.handle(.keyDown(at: 0.3))
+        var sm = locked()
         #expect(sm.handle(.maxDurationReached) == .stopAndTranscribe)
         #expect(sm.state == .idle)
-    }
-
-    @Test("hitting the duration cap while awaiting a second tap discards")
-    func maxDurationWhileAwaitingSecondTapDiscards() {
-        var sm = RecordingStateMachine()
-        _ = sm.handle(.keyDown(at: 0))
-        _ = sm.handle(.keyUp(at: 0.1))
-        #expect(sm.handle(.maxDurationReached) == .discard)
-        #expect(sm.state == .idle)
-    }
-
-    @Test("the double-tap timer expiring after the lock is ignored")
-    func doubleTapWindowExpiredWhileLockedIsIgnored() {
-        var sm = RecordingStateMachine()
-        _ = sm.handle(.keyDown(at: 0))
-        _ = sm.handle(.keyUp(at: 0.1))
-        _ = sm.handle(.keyDown(at: 0.3))
-        #expect(sm.handle(.doubleTapWindowExpired) == .none)
-        #expect(sm.state == .locked)
     }
 
     @Test("events arriving in the idle state are ignored")
     func idleIgnoresStrayEvents() {
         var sm = RecordingStateMachine()
         #expect(sm.handle(.keyUp(at: 1)) == .none)
+        #expect(sm.handle(.chordPressed) == .none)
         #expect(sm.handle(.otherKeyPressed) == .none)
         #expect(sm.handle(.escapePressed) == .none)
-        #expect(sm.handle(.doubleTapWindowExpired) == .none)
         #expect(sm.handle(.maxDurationReached) == .none)
         #expect(sm.state == .idle)
     }
 
-    @Test("thresholds are configurable")
-    func customThresholds() {
-        var sm = RecordingStateMachine(
-            thresholds: .init(hold: 1.0, doubleTap: 0.1)
-        )
+    @Test("the hold threshold is configurable")
+    func customThreshold() {
+        var sm = RecordingStateMachine(thresholds: .init(hold: 1.0))
         _ = sm.handle(.keyDown(at: 0))
-        // 0.5s is a long hold by default, but a short tap at this threshold
-        #expect(sm.handle(.keyUp(at: 0.5)) == .armDoubleTapTimer)
-        #expect(sm.state == .awaitingSecondTap(firstUpAt: 0.5))
-
-        // 0.2s after release: outside the custom 0.1s window, but inside the
-        // default 0.3s window. This assertion can only pass if the custom
-        // doubleTap value is actually in effect rather than the default.
-        #expect(sm.handle(.keyDown(at: 0.7)) == .restartCapture)
-        #expect(sm.state == .holding(downAt: 0.7))
-    }
-
-    @Test("holding exactly at the threshold transcribes")
-    func holdAtExactThresholdTranscribes() {
-        var sm = RecordingStateMachine()
-        _ = sm.handle(.keyDown(at: 0))
-        // 0.4 - 0 is exact in floating point, so this pins the >= boundary.
-        #expect(sm.handle(.keyUp(at: 0.4)) == .stopAndTranscribe)
+        // 0.5s clears the default 0.4s threshold but not this one, so this can
+        // only pass if the custom value is actually in effect.
+        #expect(sm.handle(.keyUp(at: 0.5)) == .discard)
         #expect(sm.state == .idle)
     }
 

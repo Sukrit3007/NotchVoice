@@ -44,6 +44,20 @@ actor WhisperKitService {
         self.modelVariant = modelVariant
     }
 
+    /// Where model weights and tokenizers are cached.
+    ///
+    /// Set explicitly because WhisperKit's default Hub cache root is the user's
+    /// **Documents folder** — 600MB+ of CoreML weights dropped next to their own
+    /// files, and synced to iCloud Drive if they have it on. Application Support
+    /// is where regenerable app data belongs, and it is excluded from backup by
+    /// convention.
+    nonisolated static let modelStore: URL = {
+        let identifier = Bundle.main.bundleIdentifier ?? "com.sukrit.notchvoice"
+        return URL.applicationSupportDirectory
+            .appending(path: identifier, directoryHint: .isDirectory)
+            .appending(path: "Models", directoryHint: .isDirectory)
+    }()
+
     /// Takes the decode baton, suspending if another decode holds it.
     private func acquire() async {
         guard isDecoding else { isDecoding = true; return }
@@ -63,8 +77,12 @@ actor WhisperKitService {
     func prepare(progress: @Sendable @escaping (Double) -> Void) async throws {
         guard pipe == nil else { return }
 
+        try FileManager.default.createDirectory(
+            at: Self.modelStore, withIntermediateDirectories: true)
+
         let config = WhisperKitConfig(
             model: modelVariant,
+            downloadBase: Self.modelStore,
             verbose: false,
             logLevel: .error,
             prewarm: true,

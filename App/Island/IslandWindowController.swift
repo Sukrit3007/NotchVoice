@@ -61,10 +61,36 @@ final class IslandWindowController {
         let notchOffset = NotchGeometry.notchRect(for: metrics)
             .map { $0.midX - screen.frame.midX } ?? 0
 
+        // Every screen, not just this one: a display with no cutout of its own
+        // borrows the dimensions of one that has, so that the notch on the
+        // monitor and the notch on the laptop are the same notch.
+        let notch = NotchGeometry.effectiveNotch(
+            for: metrics,
+            among: NSScreen.screens.map(\.metrics)
+        )
+
+        // Logged because every layout argument about this app has so far been
+        // conducted against a 16" test fixture rather than the machine it is
+        // running on. The wings are sized in points and the cutout is not, so
+        // the only honest way to reason about whether content clears an edge is
+        // to know what the cutout actually measures here — and, now, whether it
+        // is a hole in the display or one this app drew.
+        let islandWidth = IslandMetrics.islandWidth(
+            notchWidth: notch.size.width,
+            leadingWing: IslandMetrics.expandedLeadingWing,
+            trailingWing: IslandMetrics.waveformTrailingWing)
+        Log.island.info("""
+            Screen \(screen.frame.width, privacy: .public)x\(screen.frame.height, privacy: .public), \
+            notch \(notch.size.width, privacy: .public)x\(notch.size.height, privacy: .public) \
+            (\(notch.isPhysical ? "physical" : "drawn", privacy: .public)), \
+            island \(islandWidth, privacy: .public)
+            """)
+
         let window = IslandWindow(contentRect: frame)
         let root = IslandView(
             coordinator: coordinator,
-            notchSize: NotchGeometry.notchSize(for: metrics),
+            notchSize: notch.size,
+            isPhysical: notch.isPhysical,
             notchCenterOffset: notchOffset
         )
         window.contentView = NSHostingView(rootView: root)

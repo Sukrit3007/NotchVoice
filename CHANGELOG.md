@@ -49,9 +49,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   hotkey does nothing at all — where before it degraded to copy-only.
 - The island appears the instant the key goes down. The old 150ms delay existed
   because right-⌥ also types `ø`; `fn` types nothing, so it was pure latency.
-- Feedback cues replaced. Sounds are Wispr Flow's `v12` set, used directly —
-  **these are third-party assets and must be replaced before any distribution.**
-  `Tone` stays in Core, unused, so regenerating an original set is a small job.
+- Feedback cues are generated, not recorded. Four originals synthesised by
+  `Tools/SoundGen` as one family — A4/D5/E5/A5, all under 0.08 peak and 210ms —
+  so there is no third-party audio anywhere in the app.
 - Transcripts are no longer written to the system log in the clear. Logging moved
   from `NSLog` to `os.Logger`, and anything derived from speech is `.private`.
 - Menu bar glyph is 🗣️, and ⚠️ when a permission is missing or the model failed.
@@ -61,8 +61,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 
-- The failure sound. Wispr Flow's dictation set has none; the panel says it
-  instead.
+- The failure sound. A dictation that failed is explained in words by the panel
+  dropping out of the notch, which a tone cannot do.
 - Menu bar item showing permission state, with links into System Settings.
 - Launch at login.
 - Design spec for the notch-based dictation app.

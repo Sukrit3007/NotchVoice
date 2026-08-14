@@ -79,9 +79,8 @@ sound and the conclusion has been reversed anyway, knowingly.
 What changed is the target. Matching Wispr Flow means binding `fn`, and `fn` cannot be
 bound observationally: on a Mac where the Globe key is set to "Show Emoji & Symbols"
 (`AppleFnUsageType = 2`, common) an observed-but-not-consumed `fn` opens the emoji picker
-on every dictation, and nothing elsewhere in the app can prevent it. Wispr Flow consumes
-for exactly this reason; its helper binary carries the string
-`Suppressing escape key during dictation`.
+on every dictation, and nothing elsewhere in the app can prevent it. Every app that binds
+`fn` reaches the same conclusion, because there is no other way to get there.
 
 The cost is accepted rather than dismissed. This app's callback now runs inside the path of
 every keystroke on the machine, and a hang there stops typing everywhere until macOS

@@ -14,7 +14,9 @@ final class DictationCoordinator {
         case locked
         case transcribing
         /// The transcript is being tidied by the on-device model. Bounded by
-        /// `polishDeadline` — see `PolishService`.
+        /// whichever backend is running — see `PolishService`. Flashes past with
+        /// Apple's model and sits there for seconds with the downloaded one,
+        /// which is the honest depiction of the difference.
         case polishing
         case done
         /// Transcribed, but only reached the clipboard — the target app never
@@ -82,12 +84,6 @@ final class DictationCoordinator {
     /// Longer than `doneDwell` because these phases put a sentence in the panel,
     /// and a sentence has to be readable before it leaves.
     private static let errorDwell = Duration.seconds(4)
-
-    /// How long the polish step may take before the raw transcript is delivered.
-    ///
-    /// A guess, not a measurement. Tune against real dictations: too low and
-    /// polish never lands, too high and every dictation pays for it.
-    private static let polishDeadline = Duration.milliseconds(400)
 
     /// One source of truth for the gesture window.
     private static let thresholds = RecordingStateMachine.Thresholds()
@@ -293,9 +289,18 @@ final class DictationCoordinator {
         loadModel()
     }
 
-    /// Whether the on-device cleanup model can run. Surfaced in Settings.
+    /// Whether Apple's cleanup model can run. Surfaced in Settings.
     nonisolated var polishAvailability: PolishAvailability {
         polisher.availability
+    }
+
+    /// Re-picks the cleanup backend and warms it.
+    ///
+    /// Called when the local-model switch is flipped. Without it the choice
+    /// would take effect on the next dictation, which is also when the user
+    /// would first discover the several seconds it takes to read 2.3GB off disk.
+    func prepareCleanup() {
+        Task { await polisher.prepare() }
     }
 
     private static func now() -> TimeInterval {
@@ -437,7 +442,7 @@ final class DictationCoordinator {
                 // Only the live dictation shows a polishing state; a late one
                 // still polishes and delivers, it just does not touch the island.
                 if session == self.session { setPhase(.polishing) }
-                let text = await polisher.polish(corrected, within: Self.polishDeadline)
+                let text = await polisher.polish(corrected)
 
                 let outcome = await Paster.deliver(text, to: target)
                 Log.deliver.info(

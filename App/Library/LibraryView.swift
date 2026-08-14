@@ -68,6 +68,7 @@ struct LibraryView: View {
         case .general: GeneralPane()
         case .dictation: DictationPane(model: model, coordinator: coordinator)
         case .speech: SpeechPane(coordinator: coordinator)
+        case .cleanup: CleanupPane(coordinator: coordinator)
         case .permissions: PermissionsPane(model: model)
         case .sound: SoundPane()
         }

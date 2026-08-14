@@ -36,10 +36,6 @@ struct DictationPane: View {
                     + "read. Nothing is stored and nothing leaves your Mac."
                 )
             }
-
-            Section("Cleanup") {
-                cleanupRow
-            }
         }
         .formStyle(.grouped)
         .animation(.smooth(duration: 0.25), value: model.test)
@@ -83,30 +79,6 @@ struct DictationPane: View {
             + "— ⌥O still types ø."
     }
 
-    /// What happens between transcription and paste.
-    ///
-    /// Worth a row of its own because it is the one part of the pipeline that
-    /// can be silently absent: with Apple Intelligence off, dictation still
-    /// works and the text is simply rougher, which is impossible to tell from
-    /// "the cleanup ran and wasn't very good".
-    @ViewBuilder
-    private var cleanupRow: some View {
-        if let explanation = coordinator.polishAvailability.explanation {
-            SettingsStatusRow(
-                symbol: "wand.and.sparkles", tint: .secondary,
-                title: "Not tidying transcripts",
-                detail: explanation
-            )
-        } else {
-            SettingsStatusRow(
-                symbol: "wand.and.sparkles", tint: .accentColor,
-                title: "Tidying transcripts",
-                detail: "Filler words and stray punctuation are cleaned up "
-                      + "on-device before pasting, when that can be done "
-                      + "quickly enough not to hold the paste up."
-            )
-        }
-    }
 }
 
 #Preview {

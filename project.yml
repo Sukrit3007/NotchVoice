@@ -9,6 +9,10 @@ packages:
   WhisperKit:
     url: https://github.com/argmaxinc/argmax-oss-swift.git
     from: 0.9.0
+  # Optional local cleanup model. Everything under App/Polish/LocalModel.
+  MLXLM:
+    url: https://github.com/ml-explore/mlx-swift-lm.git
+    from: 3.31.4
   NotchVoiceCore:
     path: Core
 
@@ -24,6 +28,15 @@ targets:
     dependencies:
       - package: WhisperKit
         product: WhisperKit
+      - package: MLXLM
+        product: MLXLLM
+      - package: MLXLM
+        product: MLXLMCommon
+      # Deliberately not MLXHuggingFace. Its `#hubDownloader()` macro downloads
+      # to `~/.cache/huggingface` with no way to redirect, which is the same bug
+      # that put 616MB of speech model in the user's Documents folder — and it
+      # drags in a swift-syntax compiler plugin to do it. The two bridges it
+      # would have generated are hand-written in `HuggingFaceBridge.swift`.
       - package: NotchVoiceCore
         product: NotchVoiceCore
     settings:

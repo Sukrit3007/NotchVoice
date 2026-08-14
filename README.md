@@ -17,10 +17,11 @@ hold. Every display draws the same silhouette.
 transcripts are stored locally and never uploaded. There is no account, no telemetry and
 no server.
 
-The one time the app uses the network is the first launch, to fetch the speech model
-(~630MB) from Hugging Face. That is a file download and carries nothing about you. After
-it lands in `~/Library/Application Support/com.sukrit.notchvoice/Models`, the app works
-offline forever.
+The app uses the network to fetch models from Hugging Face, and for nothing else. The
+speech model (~630MB) comes down on first launch; the optional cleanup model (2.3GB) only
+if you ask for it in Settings. Both are file downloads that carry nothing about you, and
+both land under `~/Library/Application Support/com.sukrit.notchvoice/`. Between
+downloads the app works offline forever.
 
 ## Status
 
@@ -32,7 +33,7 @@ Core dictation loop built and awaiting hardware acceptance.
 | Hands-free | `fn`+`Space`, then `fn` again to finish |
 | Cancel | `Escape` |
 
-Every automated check passes — 65 unit tests and a clean Release build. The
+Every automated check passes — 152 unit tests and a clean Release build. The
 acceptance matrix in the milestone plan has not been run: nothing here has been
 driven by a human speaking into a microphone. `v0.1.0` is tagged when it has.
 
@@ -53,6 +54,7 @@ and a signed `.dmg` with auto-update. See
 | App shell | Swift, SwiftUI, AppKit |
 | Speech-to-text | WhisperKit (CoreML / Apple Neural Engine) |
 | Transcript cleanup | Apple Foundation Models (on-device, system-provided) |
+| Better cleanup, optional | Qwen3-4B via MLX — downloaded on request, see Cleanup in Settings |
 | Hotkey | `CGEventTap`, consuming — see below |
 | Text delivery | `NSPasteboard` round-trip + synthetic ⌘V |
 | Feedback cues | Generated, not recorded — `Tools/SoundGen` |
@@ -61,7 +63,16 @@ and a signed `.dmg` with auto-update. See
 
 - macOS 26 or later
 - Apple Silicon
-- Xcode 26+
+- Xcode 26+, plus the Metal Toolchain component:
+  `xcodebuild -downloadComponent MetalToolchain` (839MB, one-time)
+
+MLX compiles its Metal shaders from source, and Xcode 26 no longer ships that
+compiler by default. Builds also need `-skipPackagePluginValidation`, because
+`mlx-swift` carries a build-tool plugin Xcode declines to run unattended:
+
+```
+xcodebuild build -scheme NotchVoice -skipPackagePluginValidation
+```
 
 ## Permissions
 
@@ -70,7 +81,7 @@ and a signed `.dmg` with auto-update. See
 | Microphone | Recording | Hard requirement |
 | Input Monitoring | Seeing the hotkey | Hotkey never fires |
 | Accessibility | Reserving the hotkey, and pasting | Hotkey never fires |
-| Apple Intelligence | Transcript cleanup | Raw transcript is pasted |
+| Apple Intelligence | Transcript cleanup | Raw transcript is pasted, unless the local cleanup model is installed |
 
 Accessibility is required, not optional. A tap that only *observes* events needs
 Input Monitoring alone, but reserving `fn` means **consuming** the keypress, and
@@ -80,8 +91,8 @@ macOS only permits that with Accessibility.
 
 | Suite | Runs with | Covers |
 |---|---|---|
-| `Core/Tests` | `cd Core && swift test` | Pure logic — state machine, geometry, clipboard guard, island metrics |
-| `AppTests` | `xcodebuild test -scheme NotchVoice` | Anything needing AppKit, SwiftData or the built bundle — the store, cue assets, failure copy against the wing it has to fit |
+| `Core/Tests` | `cd Core && swift test` | Pure logic — state machine, geometry, clipboard guard, island metrics, cleanup guards |
+| `AppTests` | `xcodebuild test -scheme NotchVoice -skipPackagePluginValidation` | Anything needing AppKit, SwiftData or the built bundle — the store, cue assets, failure copy against the wing it has to fit |
 | `Tools/SoundGen/Tests` | `cd Tools/SoundGen && swift test` | The cue synthesiser — click-freedom, envelope, level bounds |
 
 `AppTests` is hosted in the app so `Bundle.main` is the real bundle. The app

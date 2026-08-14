@@ -18,6 +18,7 @@ enum LibraryPane: String, CaseIterable, Identifiable, Hashable {
     case general
     case dictation
     case speech
+    case cleanup
     case sound
     case permissions
 
@@ -40,7 +41,7 @@ enum LibraryPane: String, CaseIterable, Identifiable, Hashable {
     var group: Group {
         switch self {
         case .history, .dictionary, .snippets, .stats: .library
-        case .general, .dictation, .speech, .sound, .permissions: .settings
+        case .general, .dictation, .speech, .cleanup, .sound, .permissions: .settings
         }
     }
 
@@ -53,6 +54,7 @@ enum LibraryPane: String, CaseIterable, Identifiable, Hashable {
         case .general: "General"
         case .dictation: "Dictation"
         case .speech: "Speech"
+        case .cleanup: "Cleanup"
         case .sound: "Sound"
         case .permissions: "Permissions"
         }
@@ -67,6 +69,7 @@ enum LibraryPane: String, CaseIterable, Identifiable, Hashable {
         case .general: "gearshape"
         case .dictation: "mic"
         case .speech: "waveform"
+        case .cleanup: "wand.and.sparkles"
         case .sound: "speaker.wave.2"
         case .permissions: "lock.shield"
         }

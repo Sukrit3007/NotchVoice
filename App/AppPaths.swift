@@ -24,6 +24,15 @@ enum AppPaths {
         support.appending(path: "Models", directoryHint: .isDirectory)
     }
 
+    /// Weights for the optional cleanup model.
+    ///
+    /// Kept apart from `models` rather than beside the speech model, because
+    /// this one is deleted on request and "remove the cleanup model" must not be
+    /// able to take transcription down with it.
+    static var cleanupModel: URL {
+        support.appending(path: "CleanupModel", directoryHint: .isDirectory)
+    }
+
     /// The SwiftData store holding transcripts, custom words and snippets.
     ///
     /// Never audio — recordings are discarded the moment they are transcribed.

@@ -9,6 +9,12 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- An optional local cleanup model, offered in Settings → Cleanup. A 2.3GB
+  download that runs entirely on this Mac and formats better than Apple
+  Intelligence does — paragraphs where you change subject, lists where you list
+  things — at the cost of a couple of seconds per dictation. Off by default,
+  removable, and the switch is independent of the download so turning it off
+  does not mean fetching it again to change your mind.
 - Hold `fn` to dictate; release to transcribe and paste at the cursor.
 - `fn`+`Space` locks a hands-free session; `fn` again to finish.
 - Transcripts are tidied up on-device (Apple Foundation Models) before pasting,

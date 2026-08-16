@@ -27,6 +27,8 @@ if [[ -z "$(echo "$NOTES" | tr -d '[:space:]')" ]]; then
 fi
 
 echo "$NOTES"
+echo "---"
+echo
 echo "**Installing:** macOS will say it can't verify this app, because it isn't"
 echo "notarized. Open **System Settings → Privacy & Security**, scroll down, and"
 echo "click **Open Anyway**. Once only."

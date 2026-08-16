@@ -54,3 +54,23 @@ Tag names are prefixed `v`. The version inside `CHANGELOG.md` is not.
 
 `main` holds releasable work. Feature work happens on `feat/<slug>` branches and merges
 back when the milestone is complete. No commits directly to `main` once `0.1.0` is tagged.
+
+## The signing identity
+
+Releases are signed with a self-signed certificate called **Notch Voice
+Developer**, created once by `Tools/make-cert.sh`. Its fingerprint is baked into
+the app's designated requirement, which is what macOS stores permission grants
+against:
+
+```
+designated => identifier "com.sukrit.notchvoice"
+              and certificate root = H"7a43b25bb89f2ee2fa226f289021c5350470956d"
+```
+
+**Every release must produce this exact line.** `Tools/release.sh` prints it so
+it can be compared. A different hash means a different certificate, and shipping
+it resets Microphone, Accessibility and Input Monitoring for every existing
+user — they get a dictation key that silently stopped working.
+
+The certificate and Sparkle's update-signing key are the two things in this
+project that cannot be regenerated. `Tools/backup-secrets.sh` exports both.

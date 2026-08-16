@@ -10,6 +10,8 @@ final class NotchVoiceApp: NSObject, NSApplicationDelegate {
     @MainActor private var menuBar: MenuBarController?
     @MainActor private var library: LibraryWindowController?
     @MainActor private var onboarding: OnboardingWindowController?
+    /// Held for the process. Releasing it stops Sparkle checking, silently.
+    @MainActor private var updates: UpdateController?
 
     /// Starts the pipeline and surfaces anything still missing.
     ///
@@ -115,9 +117,12 @@ final class NotchVoiceApp: NSObject, NSApplicationDelegate {
             }
 
             let library = LibraryWindowController(coordinator: coordinator)
-            let menuBar = MenuBarController(coordinator: coordinator, library: library)
+            let updates = UpdateController()
+            let menuBar = MenuBarController(
+                coordinator: coordinator, library: library, updates: updates)
             menuBar.install()
             island.show()
+            self.updates = updates
 
             // First run gets the guided flow instead of a permission dialog
             // arriving out of nowhere. It owns the prompts, so `start()` waits

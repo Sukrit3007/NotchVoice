@@ -10,14 +10,20 @@ final class MenuBarController {
     private var statusItem: NSStatusItem?
     private let coordinator: DictationCoordinator
     private let library: LibraryWindowController
+    private let updates: UpdateController
 
     /// What the glyph currently shows, so a readiness change that does not cross
     /// the blocked/not-blocked line does not touch the button.
     private var shownAsBlocked: Bool?
 
-    init(coordinator: DictationCoordinator, library: LibraryWindowController) {
+    init(
+        coordinator: DictationCoordinator,
+        library: LibraryWindowController,
+        updates: UpdateController
+    ) {
         self.coordinator = coordinator
         self.library = library
+        self.updates = updates
     }
 
     func install() {
@@ -101,6 +107,7 @@ final class MenuBarController {
         menu.autoenablesItems = false
         menu.delegate = MenuRefresher.shared
         MenuActions.shared.library = library
+        MenuActions.shared.updates = updates
         MenuRefresher.shared.rebuild = { [weak self] in self?.rebuildItems(in: $0) }
         rebuildItems(in: menu)
         return menu
@@ -155,6 +162,20 @@ final class MenuBarController {
             item.isEnabled = true
             menu.addItem(item)
         }
+
+        menu.addItem(.separator())
+
+        // Below Settings rather than beside Quit: it is a thing the app does,
+        // not a way out of it. Disabled while a check is already running, which
+        // is the only state where clicking it does nothing.
+        let update = NSMenuItem(
+            title: "Check for Updates…",
+            action: #selector(MenuActions.checkForUpdates),
+            keyEquivalent: ""
+        )
+        update.target = MenuActions.shared
+        update.isEnabled = MenuActions.shared.updates?.canCheckForUpdates ?? false
+        menu.addItem(update)
 
         menu.addItem(.separator())
         let quit = NSMenuItem(
@@ -213,6 +234,13 @@ private final class MenuActions: NSObject {
     /// Weak: the controller owns the window, this only reaches it. A strong
     /// reference from a singleton would keep it alive for the process.
     weak var library: LibraryWindowController?
+
+    /// Also weak, and for the same reason — the app delegate owns it.
+    weak var updates: UpdateController?
+
+    @objc func checkForUpdates() {
+        updates?.checkForUpdates()
+    }
 
     @objc func toggleSounds() {
         SoundPreference.isEnabled.toggle()

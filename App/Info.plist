@@ -31,6 +31,27 @@
     <key>LSUIElement</key>
     <true/>
     <key>NSMicrophoneUsageDescription</key>
-    <string>NotchVoice records audio only while you hold the dictation key, and transcribes it on your Mac.</string>
+    <string>Notch Voice records audio only while you hold the dictation key, and transcribes it on your Mac. Recordings are never saved and never uploaded.</string>
+
+    <!-- Updates. Served from the repository rather than from the website: this
+         URL is compiled into every copy ever handed out and old copies keep
+         asking the old address forever, so it must not depend on a hosting
+         choice that might be revisited. The site can move or be rebuilt without
+         stranding anyone. The repository has to stay public for it to work. -->
+    <key>SUFeedURL</key>
+    <string>https://raw.githubusercontent.com/Sukrit3007/NotchVoice/main/appcast.xml</string>
+    <!-- Public half of the EdDSA pair from `generate_keys`. The private half
+         lives in the login keychain and exists in exactly one place on earth —
+         see Tools/backup-secrets.sh. Without it no future update can be signed
+         in a way already-installed copies will accept. -->
+    <key>SUPublicEDKey</key>
+    <string>NEcREEEhvWVK7Fx9wEhZ66jrEbeue0TLsazvvUq2VTs=</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+    <!-- Daily. This app has no server and no telemetry, so a check is the only
+         thing that ever leaves the Mac after the model downloads; hourly would
+         be a beacon for no benefit on a project that ships occasionally. -->
+    <key>SUScheduledCheckInterval</key>
+    <integer>86400</integer>
 </dict>
 </plist>

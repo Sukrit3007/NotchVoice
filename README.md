@@ -117,6 +117,40 @@ Deliberately not an onboarding screen: by the time any code in the app runs, the
 user is already past Gatekeeper, and explaining a dialog they cleared thirty
 seconds ago teaches them nothing.
 
+## Releasing
+
+```
+Tools/release.sh 0.1.1
+```
+
+Builds, signs, packages a `.dmg`, publishes a GitHub release, and adds an entry
+to `appcast.xml` so copies already installed find it. The release is created
+before the appcast that names its URL is pushed, so nothing ever points at a
+download that does not exist yet.
+
+Release notes come from `CHANGELOG.md` — a version with no section there cannot
+be released, which is deliberate.
+
+### The two secrets
+
+Neither is in this repository and neither can be recovered from it.
+
+| | Losing it means |
+|---|---|
+| The **Notch Voice Developer** certificate | A replacement changes the app's designated requirement. Microphone, Accessibility and Input Monitoring reset for every existing user, on the update that ships it, with no warning and no explanation |
+| Sparkle's **EdDSA private key** | No future update can be signed in a way installed copies will accept. Everyone has to download the app by hand again |
+
+Created once by `Tools/make-cert.sh`, exported by `Tools/backup-secrets.sh`.
+`Tools/release.sh` prints the designated requirement on every run; it must match
+the one recorded in [`docs/versioning.md`](docs/versioning.md) exactly.
+
+### Updates are verified, first launch is not
+
+Gatekeeper cannot check an app that was never notarized, which is why the first
+launch needs **Open Anyway**. Every update after that is checked properly:
+Sparkle verifies the download is signed by the same identity as the copy already
+running, and refuses it otherwise. The weak moment is the first install only.
+
 ## Versioning
 
 Semantic versioning, tracked with annotated git tags. See [CHANGELOG.md](CHANGELOG.md) and

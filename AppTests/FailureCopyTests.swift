@@ -10,7 +10,7 @@ import NotchVoiceCore
 /// File scope rather than a static on the suite: `@Test(arguments:)` is
 /// evaluated outside the actor, so a `@MainActor` type cannot hold it.
 let allDictationFailures: [DictationFailure] = [
-    .noMicrophone, .silent, .modelLoading, .transcriptionFailed,
+    .noMicrophone, .silent, .modelLoading, .transcriptionFailed, .stillProcessing,
 ]
 
 /// `DictationFailure` exists because the island's wing silently truncates
@@ -74,6 +74,7 @@ struct PhaseMessageTests {
         #expect(DictationCoordinator.Phase.copied.panelMessage != nil)
         #expect(DictationCoordinator.Phase.tooShort.panelMessage != nil)
         #expect(DictationCoordinator.Phase.error(.silent).panelMessage != nil)
+        #expect(DictationCoordinator.Phase.error(.stillProcessing).panelMessage != nil)
     }
 
     @Test("phases that are just progress stay quiet")

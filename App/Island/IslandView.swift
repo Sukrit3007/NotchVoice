@@ -1,12 +1,10 @@
 import SwiftUI
 import NotchVoiceCore
 
-/// The island: a black shape pinned to the top of the screen that widens in
-/// place around the notch.
-///
-/// **Every display gets the same silhouette.** A screen with no physical cutout
-/// draws one at the dimensions borrowed from a screen that has — a pill on the
-/// monitor and a notch on the laptop would be two appearances for one app.
+/// The island: a black status surface pinned to the top of the active screen.
+/// On a MacBook it widens in place around the real notch. On another display it
+/// becomes a temporary compact HUD, so the app never leaves a fake notch parked
+/// on the wallpaper.
 ///
 /// **Two axes, two meanings.** Horizontal is status — the island grows sideways
 /// into the strips either side of the notch, and that is all this file does.
@@ -29,11 +27,8 @@ struct IslandView: View {
     /// `NotchGeometry.effectiveNotch`.
     let notchSize: CGSize
 
-    /// Whether that cutout is a hole in the display or one this app is drawing.
-    ///
-    /// The difference is not cosmetic. A real cutout is always there, so the
-    /// island only ever changes width around it. A drawn one has to arrive and
-    /// leave, and cannot sit on the wallpaper at rest.
+    /// Whether the active display has a physical notch. External displays use
+    /// this measured size only for consistent vertical spacing in the HUD.
     let isPhysical: Bool
 
     /// Horizontal distance from the window's centre to the notch's centre.
@@ -74,17 +69,12 @@ struct IslandView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// Expanding answers a physical key press, so it carries a little
-    /// overshoot — Apple's shipped drawer/sheet spring, damping 0.8 and
-    /// response 0.3. Collapsing answers nothing: it is the system tidying up
-    /// after itself, so it is critically damped and never bounces. One spring
-    /// for both directions made the island wobble on its way out, which drew
-    /// the eye at exactly the moment there was nothing left to look at.
+    /// The notch is status chrome, not a playful toy. A short critically damped
+    /// spring keeps expansion responsive without overshooting the measured
+    /// cutout, and Reduce Motion becomes a calm cross-fade.
     private var transition: Animation {
         if reduceMotion { return .easeOut(duration: 0.2) }
-        return isDormant
-            ? .spring(response: 0.32, dampingFraction: 1.0)
-            : .spring(response: 0.3, dampingFraction: 0.78)
+        return .spring(response: 0.3, dampingFraction: 1.0)
     }
 
     var body: some View {
@@ -155,16 +145,12 @@ struct IslandView: View {
         }
     }
 
-    /// One presentation for every display: the same shape at the same size, the
-    /// only difference being that a drawn cutout has to arrive.
+    /// The MacBook uses the physical notch. A display without a notch gets a
+    /// short-lived macOS-style HUD instead of a fake cutout parked at the top.
     @ViewBuilder
     private var island: some View {
-        if isSynthetic && isDormant {
-            // Nothing at all. On the laptop the resting island is a small wing
-            // beside a hole that exists regardless; here there is no hole, so
-            // the same treatment would leave a black block parked on the
-            // wallpaper for the entire session.
-            EmptyView()
+        if isSynthetic {
+            externalHUD
         } else {
             notchIsland(notchSize: notchSize)
                 .offset(x: notchCenterOffset + cutoutCorrection)
@@ -174,16 +160,27 @@ struct IslandView: View {
 
     private var isSynthetic: Bool { !isPhysical }
 
-    /// How the shape enters and leaves.
-    ///
-    /// `.identity` on a real notch, because nothing enters — the cutout is
-    /// already there and only its wings change width. A drawn notch slides in
-    /// from the edge it belongs to, and leaves the same way, so it reads as
-    /// arriving from off-screen rather than materialising in place.
+    /// Compact fallback for external displays. It is only mounted while a
+    /// dictation is active because the window controller orders the surface out
+    /// during `.dormant`.
+    private var externalHUD: some View {
+        HStack(spacing: 10) {
+            leadingIcon
+            trailing
+        }
+        .padding(.horizontal, 14)
+        .frame(minHeight: max(32, notchSize.height))
+        .background(.black.opacity(0.92), in: Capsule())
+        .overlay(Capsule().stroke(.white.opacity(0.12), lineWidth: 0.5))
+        .shadow(color: .black.opacity(0.22), radius: 10, y: 4)
+        .offset(x: notchCenterOffset)
+        .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+    }
+
+    /// How the physical-notch wings change. The window controller handles the
+    /// HUD's arrival separately in `externalHUD`.
     private var arrival: AnyTransition {
-        guard isSynthetic else { return .identity }
-        if reduceMotion { return .opacity }
-        return .move(edge: .top).combined(with: .opacity)
+        .identity
     }
 
     // MARK: - Wings

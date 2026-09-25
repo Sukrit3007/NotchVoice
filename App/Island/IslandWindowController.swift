@@ -29,6 +29,18 @@ final class IslandWindowController {
     func show() {
         buildWindow(on: NSScreen.active)
         observeScreenChanges()
+        setVisible(for: coordinator.phase)
+    }
+
+    /// Retain the overlay for fast transitions, but keep the normal MacBook
+    /// notch untouched while the app is idle.
+    func setVisible(for phase: DictationCoordinator.Phase) {
+        guard let window else { return }
+        if phase == .dormant {
+            window.orderOut(nil)
+        } else if !window.isVisible {
+            window.orderFrontRegardless()
+        }
     }
 
     /// Rebuilds on the screen the pointer is on. Cheap enough to call on every
@@ -61,9 +73,9 @@ final class IslandWindowController {
         let notchOffset = NotchGeometry.notchRect(for: metrics)
             .map { $0.midX - screen.frame.midX } ?? 0
 
-        // Every screen, not just this one: a display with no cutout of its own
-        // borrows the dimensions of one that has, so that the notch on the
-        // monitor and the notch on the laptop are the same notch.
+        // External displays borrow the laptop's dimensions for consistent HUD
+        // spacing, but IslandView renders a compact HUD there rather than a
+        // fake cutout.
         let notch = NotchGeometry.effectiveNotch(
             for: metrics,
             among: NSScreen.screens.map(\.metrics)
@@ -95,7 +107,9 @@ final class IslandWindowController {
         )
         window.contentView = NSHostingView(rootView: root)
         window.setFrame(frame, display: true)
-        window.orderFrontRegardless()
+        if coordinator.phase != .dormant {
+            window.orderFrontRegardless()
+        }
 
         self.window = window
     }
@@ -117,5 +131,6 @@ final class IslandWindowController {
     /// at construction.
     func rebuildForScreenChange() {
         buildWindow(on: NSScreen.active)
+        setVisible(for: coordinator.phase)
     }
 }

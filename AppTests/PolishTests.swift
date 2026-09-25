@@ -114,6 +114,18 @@ struct PolishBackendTests {
     }
 }
 
+@Suite("Cleanup deadline latch")
+struct FirstResultTests {
+
+    @Test("a nil cleanup result still wakes the caller")
+    func nilResultDoesNotHang() async {
+        let latch = FirstResult<String?>()
+        let waiter = Task { await latch.wait() }
+        latch.resolve(nil)
+        #expect(await waiter.value == nil)
+    }
+}
+
 @Suite("Cleanup instructions")
 struct PolishInstructionsTests {
 

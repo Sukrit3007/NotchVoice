@@ -111,6 +111,7 @@ final class NotchVoiceApp: NSObject, NSApplicationDelegate {
             // which is exactly why it would survive into a version where it is.
             coordinator.onPhaseChange = { [weak island] phase in
                 Log.island.debug("Phase: \(String(describing: phase), privacy: .public)")
+                island?.setVisible(for: phase)
                 if phase == .recording {
                     island?.moveToActiveScreen()
                 }

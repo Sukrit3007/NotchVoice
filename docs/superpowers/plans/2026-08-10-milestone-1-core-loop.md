@@ -3089,47 +3089,48 @@ Grant Microphone, Input Monitoring, and Accessibility when prompted. Relaunch af
 
 Every row must pass. These are the spec's §13 manual checks.
 
-**Core loop, in each of Slack, Cursor, Terminal, Safari, and TextEdit:**
+**Core loop, in TextEdit and a browser text field:**
 
 | Test | Expected |
 |---|---|
-| Hold right-⌥, speak a sentence, release | Text appears at the cursor, correctly transcribed |
-| Double-tap right-⌥, speak, tap again | Same, hands-free |
-| Tap right-⌥ once and wait | Nothing happens, nothing pasted |
+| Hold `fn`, speak a sentence, release | Text appears in the original target, correctly transcribed |
+| Press `fn`+`Space`, speak, press `fn` again | Same, hands-free |
+| Tap `fn` once and release quickly | Nothing happens, nothing pasted |
 
 **Non-interference — the app must not disturb normal typing:**
 
 | Test | Expected |
 |---|---|
-| Type `⌥ + o` in TextEdit | `ø` appears, no dictation triggered |
-| Press `⌥ + ←` | Cursor jumps a word, no dictation triggered |
+| Type normally while the app is idle | Every character appears, nothing dropped |
+| Press `fn` with no permission | The app explains the missing permission; it does not paste |
 | Type a full paragraph normally | Every character appears, nothing dropped |
-| Press left-⌥ and hold | Nothing happens |
+| Press a configured non-`fn` binding and hold | The same dictation flow works |
 
 **Clipboard safety:**
 
 | Test | Expected |
 |---|---|
-| `echo SENTINEL \| pbcopy`, dictate, then `pbpaste` | Prints `SENTINEL` |
+| `echo SENTINEL \| pbcopy`, dictate, then `pbpaste` | Prints `SENTINEL` when the original target consumes the paste |
 | Copy an image, dictate, then paste the image somewhere | Image still pastes intact |
 
 **Displays:**
 
 | Test | Expected |
 |---|---|
-| Dictate on the laptop screen | Island animates in the notch |
+| Dictate on the laptop screen | Status appears in the real notch |
 | Dictate on an external monitor | HUD capsule drops from the top |
-| Unplug the monitor mid-session, dictate | Island reappears on the laptop screen |
-| Dictate inside a fullscreen app | Island still visible |
+| Unplug the monitor, dictate again | The notch surface reappears on the laptop |
+| Dictate inside a fullscreen app | The notch surface remains visible |
 
 **Degradation:**
 
 | Test | Expected |
 |---|---|
-| Revoke Accessibility, dictate | Text is copied, island says so, nothing pasted |
+| Switch applications before delivery | Text is copied, nothing is pasted into the new app, and the notch explains why |
+| Press the key while a result is processing | “Still processing”; no second recording starts |
 | Hold and release immediately | "Too short", nothing pasted |
-| Hold, say nothing, release after 2s | "Nothing heard" |
-| Hold, speak, press `Esc` | Nothing pasted, island collapses |
+| Hold, say nothing, release after 2s | The notch says it heard no speech |
+| Hold, speak, press `Escape` | Nothing pasted, notch collapses |
 
 If anything fails, fix it and re-run the whole checklist. Do not tag a release with a failing row.
 
@@ -3144,17 +3145,17 @@ Replace the `[Unreleased]` section of `CHANGELOG.md` with:
 
 ### Added
 
-- Hold right-Option to dictate; release to transcribe and paste at the cursor.
-- Double-tap to lock a hands-free session; tap again to finish.
+- Hold `fn` to dictate; release to transcribe and paste into the original target.
+- Press `fn`+`Space` to lock a hands-free session; press `fn` again to finish.
 - Status UI in the MacBook notch, with a system-HUD-style fallback on displays
   without one.
 - Live waveform driven by real microphone amplitude.
 - On-device transcription via WhisperKit, model resident for instant starts.
 - Clipboard-safe delivery — the original clipboard is restored unless something
   else wrote to it during the paste.
-- Copy-only fallback when Accessibility has not been granted.
-- Menu bar item showing permission state, with links into System Settings.
-- Launch at login.
+- Copy-only fallback when the original target cannot be verified safely.
+- Visible temporary-store warning when history cannot be opened.
+- Self-signed public distribution that preserves the existing Sparkle identity.
 ```
 
 - [ ] **Step 6: Update the README status**
@@ -3164,7 +3165,7 @@ Replace the Status section of `README.md` with:
 ```markdown
 ## Status
 
-v0.1.0 — core dictation loop working. Hold right-Option, speak, release.
+v0.1.0 — notch-first dictation loop working. Hold `fn`, speak, release.
 
 Next: transcript cleanup via Foundation Models (0.2.0), custom vocabulary bias
 (0.3.0), transcript history (0.4.0). See

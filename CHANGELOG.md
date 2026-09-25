@@ -68,12 +68,24 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Design spec for the notch-based dictation app.
 - Repository scaffolding: gitignore, readme, versioning convention.
 
-<!--
-Held under [Unreleased] on purpose. The 0.1.0 heading and its tag go on only
-once the acceptance matrix in the milestone plan has actually been worked
-through on hardware — dictating into real apps, the two non-interference and
-clipboard gates, and the display cases. Every automated check passes, but
-nothing above has been driven by a human yet, and a version number is a claim
-that it has.
--->
+## [0.1.0] - 2026-09-08
 
+### Added
+
+- Notch-first dictation with an invisible idle state, connected notch panel, and
+  temporary external-display HUD fallback.
+- Target-safe clipboard delivery, one-at-a-time processing, persistent history,
+  and visible temporary-store warnings.
+- Release checks for Core, app-hosted, and SoundGen tests, stable Xcode 26.6,
+  signing identity, semantic versions, and resumable Sparkle publishing.
+
+### Changed
+
+- Apple cleanup uses a fresh Foundation Models session for every dictation and
+  cleanup deadlines return the raw transcript when they expire.
+
+<!--
+The public 0.1.0 tag still requires the physical MacBook acceptance matrix in
+docs/acceptance.md. Automated checks are necessary but do not replace the
+microphone, notch, permission, sleep/wake, and reduced-motion pass.
+-->

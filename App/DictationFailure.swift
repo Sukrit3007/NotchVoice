@@ -12,6 +12,8 @@ enum DictationFailure: Equatable {
     /// The speech model had not finished loading.
     case modelLoading
     case transcriptionFailed
+    /// A second key press arrived before the previous dictation finished.
+    case stillProcessing
 
     /// One word, for the island's trailing wing.
     var short: String {
@@ -20,6 +22,7 @@ enum DictationFailure: Equatable {
         case .silent: "Silent"
         case .modelLoading: "Loading"
         case .transcriptionFailed: "Failed"
+        case .stillProcessing: "Busy"
         }
     }
 
@@ -38,6 +41,8 @@ enum DictationFailure: Equatable {
             "Still loading the speech model. Try again in a moment."
         case .transcriptionFailed:
             "Couldn't transcribe that. The details are in Console."
+        case .stillProcessing:
+            "Still processing the previous dictation. Try again in a moment."
         }
     }
 }

@@ -119,7 +119,7 @@ struct IslandMetricsTests {
             leadingWing: IslandMetrics.expandedLeadingWing,
             trailingWing: IslandMetrics.waveformTrailingWing
         )
-        let expected: CGFloat = 185 + 34 + 44
+        let expected: CGFloat = 185 + 36 + 44
         #expect(width == expected)
     }
 

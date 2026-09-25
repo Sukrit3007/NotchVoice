@@ -1,5 +1,5 @@
 import Foundation
-import WhisperKit
+@preconcurrency import WhisperKit
 
 enum TranscriptionError: Error {
     case notReady
@@ -129,7 +129,11 @@ actor WhisperKitService {
     /// output toward the vocabulary in it — how custom words and on-screen
     /// context get fixed at the point they are *heard* rather than rewritten
     /// afterwards on a guess about what went wrong.
-    func transcribe(_ samples: [Float], prompt: String? = nil) async throws -> String {
+    func transcribe(
+        _ samples: [Float],
+        prompt: String? = nil,
+        language: String? = nil
+    ) async throws -> String {
         guard let pipe else { throw TranscriptionError.notReady }
 
         await acquire()
@@ -147,8 +151,6 @@ actor WhisperKitService {
         // `detectLanguage` only means anything alongside a nil language, and a
         // nil language without it makes the decoder guess silently. The two move
         // together or not at all.
-        let language = LanguagePreference.current.code
-
         let options = DecodingOptions(
             task: .transcribe,
             language: language,

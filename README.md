@@ -8,10 +8,10 @@ On-device voice dictation for macOS, living in the MacBook notch.
 > identifier keys both the TCC grants and `UserDefaults`. Renaming the bundle
 > without moving the identifier turned out to preserve the permission grants.
 
-Hold `fn`, speak, release — the transcribed text is tidied up and pasted into whatever text
-field had focus. Status shows in the notch, expanding and collapsing like the iPhone
-Dynamic Island, with a panel dropping out of it when there is more to say than a wing can
-hold. Every display draws the same silhouette.
+Hold `fn`, speak, release — the transcribed text is tidied up and pasted back into the
+application that was active when dictation started. The MacBook notch is the primary status
+surface: it stays hidden while idle, appears during recording and processing, and expands for
+longer messages. External displays use a temporary compact HUD because they have no notch.
 
 **Your voice never leaves your Mac.** Audio is transcribed on-device and discarded;
 transcripts are stored locally and never uploaded. There is no account, no telemetry and
@@ -25,7 +25,8 @@ downloads the app works offline forever.
 
 ## Status
 
-Core dictation loop built and awaiting hardware acceptance.
+The notch-first dictation loop, target-safe paste flow, history preservation, and release checks
+are implemented. A final MacBook hardware pass is still required before a public tag.
 
 | | |
 |---|---|
@@ -33,9 +34,8 @@ Core dictation loop built and awaiting hardware acceptance.
 | Hands-free | `fn`+`Space`, then `fn` again to finish |
 | Cancel | `Escape` |
 
-Every automated check passes — 152 unit tests and a clean Release build. The
-acceptance matrix in the milestone plan has not been run: nothing here has been
-driven by a human speaking into a microphone. `v0.1.0` is tagged when it has.
+Core and SoundGen tests run locally. The full app-hosted build and tests require the stable
+Xcode Metal Toolchain and must pass before publishing.
 
 **`fn` is reserved while the app runs.** Holding it starts a dictation instead of
 doing whatever macOS would otherwise do with the Globe key, because the event tap
@@ -43,9 +43,11 @@ consumes it. `fn` in combination — `fn`+`Delete`, `fn`+arrows — is untouched
 binding can be changed to a right-hand modifier in Settings, and falls back to one
 automatically on keyboards with no `fn` key.
 
-Next: a library window (history, custom words, snippets, stats), first-run onboarding,
-and a signed `.dmg` with auto-update. See
-[`docs/superpowers/specs/2026-08-06-notch-dictation-design.md`](docs/superpowers/specs/2026-08-06-notch-dictation-design.md).
+The app includes the library window (history, custom words, snippets, stats), Sparkle update
+checks, and a publicly downloadable self-signed `.dmg`. Existing installs keep the current
+bundle identity, history path, update feed, and update key. See the
+[`MacBook acceptance matrix`](docs/acceptance.md) and the
+[`notch-first ADR`](docs/adr/0001-notch-first-status-surface.md).
 
 ## Stack
 
@@ -122,6 +124,9 @@ seconds ago teaches them nothing.
 ```
 Tools/release.sh 0.1.1
 ```
+
+To validate a version and its changelog entry without building, signing, tagging, or
+publishing anything, use `Tools/release.sh --dry-run 0.1.1`.
 
 Builds, signs, packages a `.dmg`, publishes a GitHub release, and adds an entry
 to `appcast.xml` so copies already installed find it. The release is created

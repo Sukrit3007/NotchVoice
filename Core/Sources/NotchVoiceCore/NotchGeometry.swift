@@ -48,15 +48,13 @@ public enum NotchGeometry {
     /// notched display at all — a Mac mini or Studio driving external monitors.
     public static let fallbackNotch = CGSize(width: 185, height: 32)
 
-    /// Which cutout a given screen should draw, and whether it is real.
+    /// The notch dimensions a status surface should use, and whether they come
+    /// from a real cutout. A screen with no cutout borrows the laptop's
+    /// dimensions for consistent HUD spacing; the caller still renders a HUD
+    /// there rather than drawing a fake notch.
     ///
-    /// Every display draws the same silhouette; a screen with no cutout of its
-    /// own borrows the dimensions of one that has.
-    ///
-    /// Borrowing rather than hardcoding is what makes the two screens agree:
-    /// on a 16" the physical cutout is 200pt, and an external monitor beside it
-    /// drawing 185 would be visibly the wrong notch sitting next to the right
-    /// one.
+    /// Borrowing rather than hardcoding keeps vertical metrics consistent when
+    /// a 16" or 14" MacBook is connected to an external monitor.
     ///
     /// `isPhysical` is returned alongside the size because the two answers must
     /// not be derived separately. The caller needs it for more than drawing —

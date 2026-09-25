@@ -10,12 +10,9 @@
     <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
     <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-    <!-- The user-facing name has a space; the bundle identifier, the executable
-         and the .app filename deliberately do not. TCC grants (Microphone,
-         Accessibility, Input Monitoring) are keyed to the bundle identifier and
-         signature, and this app now consumes keystrokes — losing those grants
-         means losing the hotkey entirely. Renaming the product would be a
-         cosmetic change with a real cost, so only these two keys move. -->
+    <!-- Keep the bundle identifier and signing identity stable: macOS keys
+         Microphone, Accessibility and Input Monitoring grants to that identity.
+         The user-facing app name may contain spaces. -->
     <key>CFBundleName</key>
     <string>Notch Voice</string>
     <key>CFBundleDisplayName</key>

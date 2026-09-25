@@ -22,6 +22,8 @@ enum PasteOutcome {
 /// the meantime. See `ClipboardGuard`.
 enum Paster {
 
+    private static let deliveryGate = DeliveryGate()
+
     /// How long to wait for the target to ask for the promised data.
     ///
     /// Generous relative to the old blind 150ms wait, because this one is doing
@@ -50,6 +52,9 @@ enum Paster {
 
     @MainActor
     static func deliver(_ text: String, to focus: FocusSnapshot?) async -> PasteOutcome {
+        await deliveryGate.acquire()
+        defer { Task { await deliveryGate.release() } }
+
         // Pasting into ourselves would double-insert or miss the real target.
         let targetIsSelf = focus?.bundleID == NotchVoice.bundleID
 
@@ -60,6 +65,15 @@ enum Paster {
 
         focus.activate()
         try? await Task.sleep(for: activateSettleDelay)
+
+        // Reactivation is a request, not proof. If the user has moved to a
+        // different app while transcription ran, keep the text on the
+        // clipboard instead of surprising that new app with an insertion.
+        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == focus.pid else {
+            writePlainText(text)
+            Log.deliver.notice("Original target is no longer frontmost — copied only")
+            return .copiedOnly
+        }
 
         let snapshot = ClipboardSnapshot.capture()
 
@@ -131,5 +145,29 @@ enum Paster {
         down.post(tap: .cgSessionEventTap)
         up.post(tap: .cgSessionEventTap)
         return true
+    }
+}
+
+/// Serializes clipboard and synthetic-keyboard delivery. Actors are reentrant,
+/// so a boolean plus continuations is used instead of assuming actor isolation
+/// alone will keep two `deliver` calls apart while one is awaiting AppKit.
+private actor DeliveryGate {
+    private var occupied = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func acquire() async {
+        guard occupied else {
+            occupied = true
+            return
+        }
+        await withCheckedContinuation { waiters.append($0) }
+    }
+
+    func release() {
+        if waiters.isEmpty {
+            occupied = false
+        } else {
+            waiters.removeFirst().resume()
+        }
     }
 }

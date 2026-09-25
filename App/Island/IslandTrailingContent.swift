@@ -65,6 +65,7 @@ struct IslandTrailingContent: View {
             .tracking(0.15)
             .foregroundStyle(tint)
             .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
             .allowsTightening(true)
             .truncationMode(.tail)
             .transition(.opacity.animation(.smooth(duration: 0.2)))

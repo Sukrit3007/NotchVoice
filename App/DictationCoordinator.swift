@@ -127,11 +127,19 @@ final class DictationCoordinator {
     /// Mirrors `WhisperKitService.isReady`, which is actor-isolated and so
     /// cannot be read from a synchronous path like `armTap()`.
     @ObservationIgnored private var modelLoaded = false
+    /// The model load that is currently allowed to update readiness. A model
+    /// change cancels the old task and advances this generation so late
+    /// callbacks cannot turn the new model green prematurely.
+    @ObservationIgnored private var loadTask: Task<Void, Never>?
+    @ObservationIgnored private var loadGeneration = 0
 
-    /// Bumped on every capture. A second dictation can begin while the first is
-    /// still decoding, and the late result must not stamp `.done` over the
-    /// recording now in progress. Its text is still delivered — the user said
-    /// those words — only the phase update is dropped.
+    /// True from the end of recording until delivery (or a processing error).
+    /// The event tap uses this as a hard one-at-a-time gate.
+    @ObservationIgnored private var isProcessing = false
+
+    /// Bumped on every capture. The processing gate normally prevents a second
+    /// capture, but keeping a session token also protects the UI if a late task
+    /// completes after cancellation or a future gesture change.
     @ObservationIgnored private var session = 0
 
     init(stack: DataStack = .shared) {
@@ -198,6 +206,10 @@ final class DictationCoordinator {
         tap.onKeyDown = { [weak self] in
             guard let self else { return }
             onBindingKeyDown?()
+            if isProcessing {
+                showBusy()
+                return
+            }
             dispatch(.keyDown(at: Self.now()))
         }
         tap.onKeyUp = { [weak self] in self?.dispatch(.keyUp(at: Self.now())) }
@@ -253,17 +265,30 @@ final class DictationCoordinator {
 
     /// Loads the speech model. No-ops if it is already resident.
     func loadModel() {
-        Task {
+        guard loadTask == nil else { return }
+        let generation = loadGeneration
+        let service = transcriber
+        loadTask = Task { [weak self] in
+            defer {
+                if let self, self.loadGeneration == generation {
+                    self.loadTask = nil
+                }
+            }
             let startedAt = Self.now()
             Log.dictation.info("Loading model… (~12s; dictation is unavailable until ready)")
             do {
-                try await transcriber.prepare { [weak self] phase in
-                    Task { @MainActor in self?.modelPhase = phase }
+                try await service.prepare { [weak self] phase in
+                    Task { @MainActor in
+                        guard let self, self.loadGeneration == generation else { return }
+                        self.modelPhase = phase
+                    }
                 }
+                guard !Task.isCancelled, let self, self.loadGeneration == generation else { return }
                 Log.dictation.info("Model ready in \(Self.now() - startedAt, privacy: .public)s")
                 modelLoaded = true
                 if readiness != .needsPermission { readiness = .ready }
             } catch {
+                guard !Task.isCancelled, let self, self.loadGeneration == generation else { return }
                 Log.dictation.error(
                     "Model FAILED to load: \(error.localizedDescription, privacy: .public)")
                 readiness = .modelUnavailable(error.localizedDescription)
@@ -283,8 +308,12 @@ final class DictationCoordinator {
         ModelPreference.current = model
         Log.dictation.info("Switching to \(model.title, privacy: .public)")
 
+        loadTask?.cancel()
+        loadTask = nil
+        loadGeneration &+= 1
         transcriber = WhisperKitService(model: model)
         modelLoaded = false
+        modelPhase = .loading
         if readiness != .needsPermission { readiness = .loadingModel }
         loadModel()
     }
@@ -398,12 +427,18 @@ final class DictationCoordinator {
             return
         }
 
+        isProcessing = true
         setPhase(.transcribing)
         // After the minimum-duration guard, so a too-short take stays silent.
         // Decoding runs for a second or two and the loop needs a sound in it.
         Cues.play(.stop)
         let target = focus
         let session = self.session
+        // A model or language change while this task is suspended must apply to
+        // the next dictation only. Capture these values before the first await.
+        let transcriber = self.transcriber
+        let language = LanguagePreference.current.code ?? "auto"
+        let modelVariant = transcriber.modelVariant
         // Read here rather than inside the Task: by the time transcription
         // returns the user may have switched headphones, and the row should say
         // which microphone actually heard this take.
@@ -417,7 +452,8 @@ final class DictationCoordinator {
                 // island appearing. Failing to read it is not an error — the
                 // dictation just goes ahead unbiased.
                 let prompt = await biasPrompt(context: context)
-                let raw = try await transcriber.transcribe(samples, prompt: prompt)
+                let raw = try await transcriber.transcribe(
+                    samples, prompt: prompt, language: language == "auto" ? nil : language)
                 // `.private` on the transcript, public on its shape: the log is
                 // readable by anything that can run `log show`. See `Log`.
                 Log.dictation.info(
@@ -457,11 +493,11 @@ final class DictationCoordinator {
                         text: text,
                         rawText: text == raw ? nil : raw,
                         durationSeconds: duration,
-                        language: WhisperKitService.language,
+                        language: language,
                         targetBundleID: outcome == .pasted ? target?.bundleID : nil,
                         targetAppName: outcome == .pasted ? target?.appName : nil,
                         micDevice: micDevice,
-                        modelVariant: transcriber.modelVariant
+                        modelVariant: modelVariant
                     ))
                 finish(session,
                        with: outcome == .pasted ? .done : .copied,
@@ -490,6 +526,7 @@ final class DictationCoordinator {
                 "Session \(session, privacy: .public) finished late (now \(self.session, privacy: .public)) — phase left alone")
             return
         }
+        isProcessing = false
         setPhase(phase)
         // Only success is sounded. A failed dictation is announced by the panel
         // dropping out of the notch instead.
@@ -607,5 +644,12 @@ final class DictationCoordinator {
         // Mac for an app that is doing nothing.
         tap?.isDictating = next != .dormant
         onPhaseChange?(next)
+    }
+
+    /// Gives feedback for a key press that arrived while the previous result
+    /// was still being decoded or delivered.
+    private func showBusy() {
+        setPhase(.error(.stillProcessing))
+        scheduleCollapse(after: .seconds(1.4))
     }
 }

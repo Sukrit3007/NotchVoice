@@ -12,22 +12,49 @@ import SwiftUI
 struct LibraryView: View {
     @Bindable var model: SettingsModel
     let coordinator: DictationCoordinator
+    let isHistoryEphemeral: Bool
+
+    init(
+        model: SettingsModel,
+        coordinator: DictationCoordinator,
+        isHistoryEphemeral: Bool = false
+    ) {
+        self.model = model
+        self.coordinator = coordinator
+        self.isHistoryEphemeral = isHistoryEphemeral
+    }
 
     var body: some View {
-        NavigationSplitView {
-            List(selection: paneSelection) {
-                ForEach(LibraryPane.Group.allCases) { group in
-                    Section(group.rawValue) {
-                        ForEach(group.panes) { pane in
-                            row(for: pane).tag(pane)
+        VStack(spacing: 0) {
+            if isHistoryEphemeral {
+                Label(
+                    "History is temporary for this launch. Dictation still works, but new captures will not survive quitting.",
+                    systemImage: "exclamationmark.triangle.fill"
+                )
+                .font(.callout)
+                .foregroundStyle(.orange)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(.orange.opacity(0.12))
+                .accessibilityAddTraits(.isStaticText)
+            }
+
+            NavigationSplitView {
+                List(selection: paneSelection) {
+                    ForEach(LibraryPane.Group.allCases) { group in
+                        Section(group.rawValue) {
+                            ForEach(group.panes) { pane in
+                                row(for: pane).tag(pane)
+                            }
                         }
                     }
                 }
+                .navigationSplitViewColumnWidth(min: 168, ideal: 184, max: 220)
+            } detail: {
+                detail
+                    .navigationTitle(model.pane.title)
             }
-            .navigationSplitViewColumnWidth(min: 168, ideal: 184, max: 220)
-        } detail: {
-            detail
-                .navigationTitle(model.pane.title)
         }
     }
 

@@ -26,8 +26,6 @@ actor AppleIntelligencePolish: PolishBackend {
     /// matters when the output goes straight into their document.
     private static let options = GenerationOptions(temperature: 0.2)
 
-    private var session: LanguageModelSession?
-
     nonisolated var isAvailable: Bool {
         SystemLanguageModel.default.isAvailable
     }
@@ -39,15 +37,21 @@ actor AppleIntelligencePolish: PolishBackend {
     }
 
     /// Builds the session up front so the first dictation does not pay for it.
-    /// Safe to call again; later calls no-op.
+    /// Foundation Models sessions retain their transcript, so there is no
+    /// reusable session to warm: each dictation gets a clean context below.
     func prepare() {
-        guard session == nil, isAvailable else { return }
-        session = LanguageModelSession(instructions: instructions)
+        // Availability is still checked here so the warm-up path has the same
+        // behavior as the first real request.
+        guard isAvailable else { return }
     }
 
     func polish(_ text: String) async throws -> String {
         prepare()
-        guard let session else { throw PolishError.unavailable }
+        guard isAvailable else { throw PolishError.unavailable }
+        // A session is a conversation. Dictations are independent documents,
+        // so sharing one would carry previous speech into the next rewrite and
+        // eventually exhaust the session context window.
+        let session = LanguageModelSession(instructions: instructions)
         let response = try await session.respond(to: text, options: Self.options)
         return response.content.trimmingCharacters(in: .whitespacesAndNewlines)
     }

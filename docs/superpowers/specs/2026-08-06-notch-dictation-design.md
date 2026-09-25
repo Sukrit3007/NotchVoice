@@ -1,7 +1,7 @@
 # NotchVoice — Design
 
 **Date:** 2026-08-06
-**Status:** Approved, ready for planning
+**Status:** Updated 2026-09-08 — implementation reference
 
 ---
 
@@ -22,8 +22,9 @@ Everything runs on-device. No network calls at runtime.
 - Text-to-speech, voice cloning, agent voice output — voicebox's other half. Out of scope.
 - Live/streaming transcription. Batch only (see §4).
 - Cross-platform. macOS 26+ only.
-- Distribution to other users. Personal tool; no notarization, Sparkle updater, or
-  onboarding polish beyond the permission gates.
+- Developer ID signing and notarization. Public distribution remains self-signed for
+  this release so existing Sparkle trust, permissions, and history continue to work.
+  Manual reinstall is the recovery path if those signing or update keys are lost.
 - A general-purpose island hosting music/battery/AirDrop. Dictation only.
 
 ## 3. Reference implementations
@@ -49,7 +50,7 @@ worth, rewritten rather than copied:
   inside it that animates size and corner radius.
 
 MacIsland's approach of faking a notch on external displays is **explicitly rejected** —
-see §7.
+see §7. External displays use a temporary compact HUD instead.
 
 ## 4. Decisions
 
@@ -67,7 +68,7 @@ Each was chosen deliberately; rationale recorded so they can be revisited knowin
 | Text delivery | Clipboard round-trip + synthetic ⌘V | Works in Electron, terminals, and custom text engines where AX insertion fails. |
 | Delivery fallback | Copy-only when the paste is not consumed | Detected, not assumed — the text is staged as a pasteboard promise and the provider callback is the proof. |
 | Refinement LLM | Apple Foundation Models | On-device, system-provided. Zero download, zero bundle size, no second runtime. |
-| Non-notch display | Match the system volume HUD | Native-feeling. Faking a notch on a notchless screen looks wrong. |
+| Non-notch display | Temporary compact HUD | Native-feeling fallback. It appears only while a dictation is active. |
 | Process model | Single process, no XPC split | Crash isolation isn't worth the complexity for a personal tool. |
 
 ### Note on reversing the observe-only decision
@@ -177,25 +178,17 @@ guessed from a description.
 
 ## 7. Display handling
 
-One silhouette on every display.
+The MacBook notch is the primary surface. A screen without a notch gets a temporary HUD
+fallback; the app does not draw a permanent fake cutout there.
 
 - **Screen has a notch** → use the real notch. Geometry from `safeAreaInsets` and the
   auxiliary top areas.
-- **Screen has no notch** → draw one, at the dimensions borrowed from a display that has
-  a physical cutout. Borrowed rather than fixed, so a 16" MacBook's 200pt notch and the
-  monitor beside it agree; falls back to 185×32 on a Mac with no notched display at all.
+- **Screen has no notch** → show a compact, volume-HUD-style capsule while recording or
+  processing. It is ordered out as soon as the phase returns to dormant.
 
-**Reversed from the original decision.** This section previously read "explicitly not
-doing: drawing a fake notch on a notchless display", and notchless screens got a floating
-capsule styled after the system volume HUD. That produced two appearances for one app —
-a pill on the monitor and a notch on the laptop — and the capsule's match against the real
-system HUD was never actually performed. A single shape everywhere is worth more than a
-faithful imitation of a control this app is not.
-
-The drawn notch is **only present while dictating**. The physical one is a hole that
-exists regardless, so the island can rest beside it for the cost of a small wing; a drawn
-one at rest would be a black block parked on the wallpaper for the whole session. It
-arrives from the top edge in one motion, already at full width.
+The physical notch surface is also hidden while dormant. Longer messages expand downward
+from the notch into the connected panel; on an external display the same message panel
+hangs from the temporary HUD.
 
 Island follows the screen the user is working on. Display connect/disconnect and
 `NSApplication.didChangeScreenParametersNotification` rebuild the window against the new

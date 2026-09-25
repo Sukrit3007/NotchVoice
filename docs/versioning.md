@@ -23,11 +23,9 @@ Mapping the build order in the design spec onto versions:
 
 | Version | Contents |
 |---|---|
-| `0.1.0` | Core loop — hotkey, recording, WhisperKit, paste, island states, menu bar, launch at login |
-| `0.2.0` | Transcript cleanup via Foundation Models |
-| `0.3.0` | Custom vocabulary bias |
-| `0.4.0` | Transcript history |
-| `1.0.0` | The above, stable in daily use, permissions flow polished |
+| `0.1.0` | Notch-first core loop — hotkey, recording, WhisperKit, safe paste, cleanup, history, and external-display fallback |
+| `0.2.0` | Follow-up usability and cleanup improvements |
+| `1.0.0` | Stable daily use after the MacBook acceptance matrix is complete |
 
 ## Tagging
 
@@ -74,3 +72,7 @@ user — they get a dictation key that silently stopped working.
 
 The certificate and Sparkle's update-signing key are the two things in this
 project that cannot be regenerated. `Tools/backup-secrets.sh` exports both.
+
+If either key is lost, do not replace it in place. Existing copies will reject an update
+signed by a new identity. Publish a fresh self-signed download, have users remove the old
+copy, reinstall manually, and grant Microphone, Accessibility, and Input Monitoring again.

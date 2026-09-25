@@ -77,7 +77,11 @@ final class LibraryWindowController: NSObject, NSWindowDelegate {
         // next open crashes rather than reusing it.
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(
-            rootView: LibraryView(model: model, coordinator: coordinator)
+            rootView: LibraryView(
+                model: model,
+                coordinator: coordinator,
+                isHistoryEphemeral: stack.isEphemeral
+            )
                 .modelContainer(stack.container)
         )
         window.center()

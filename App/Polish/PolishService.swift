@@ -105,26 +105,72 @@ actor PolishService {
 
     /// Runs the backend against its own deadline. Nil if it lost, or threw.
     private func race(_ backend: any PolishBackend, on text: String) async -> String? {
-        await withTaskGroup(of: String?.self) { group in
-            group.addTask {
-                do {
-                    return try await backend.polish(text)
-                } catch {
-                    Log.polish.error(
-                        "Polish failed: \(error.localizedDescription, privacy: .public)")
-                    return nil
-                }
+        // A structured task group cannot implement a hard deadline: Swift waits
+        // for every child before returning, even after `cancelAll()`. These are
+        // explicitly owned tasks instead. The latch returns on the first result
+        // while cancellation remains cooperative for the backend work.
+        let latch = FirstResult<String?>()
+        let work = Task {
+            do {
+                latch.resolve(try await backend.polish(text))
+            } catch {
+                Log.polish.error(
+                    "Polish failed: \(error.localizedDescription, privacy: .public)")
+                latch.resolve(nil)
             }
-            group.addTask {
-                try? await Task.sleep(for: backend.deadline)
-                return nil
-            }
+        }
+        let timeout = Task {
+            try? await Task.sleep(for: backend.deadline)
+            guard !Task.isCancelled else { return }
+            latch.resolve(nil)
+        }
 
-            // Whichever finishes first wins; the loser is cancelled rather than
-            // left running against the next dictation.
-            let first = await group.next() ?? nil
-            group.cancelAll()
-            return first
+        let result = await latch.wait()
+        work.cancel()
+        timeout.cancel()
+        return result
+    }
+}
+
+/// A one-shot result that can be completed by either the backend or its timer.
+/// The lock also covers the small race where the result arrives before the
+/// waiting task installs its continuation.
+/// Internal so the app-hosted suite can exercise the timeout path, including
+/// the meaningful `nil` result used when a backend misses its deadline.
+final class FirstResult<Value: Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var resolved = false
+    // Result.success(nil) is distinct from an unresolved result when Value is
+    // itself optional (the cleanup race uses FirstResult<String?>).
+    private var result: Result<Value, Never>?
+    private var continuation: CheckedContinuation<Value, Never>?
+
+    func resolve(_ value: Value) {
+        lock.lock()
+        guard !resolved else {
+            lock.unlock()
+            return
+        }
+        resolved = true
+        self.result = .success(value)
+        let continuation = self.continuation
+        self.continuation = nil
+        lock.unlock()
+        continuation?.resume(returning: value)
+    }
+
+    func wait() async -> Value {
+        await withCheckedContinuation { continuation in
+            lock.lock()
+            if let result {
+                lock.unlock()
+                switch result {
+                case let .success(value): continuation.resume(returning: value)
+                }
+            } else {
+                self.continuation = continuation
+                lock.unlock()
+            }
         }
     }
 }

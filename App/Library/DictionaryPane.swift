@@ -35,7 +35,10 @@ struct DictionaryPane: View {
             }
         }
         .sheet(item: $editing) { entry in
-            DictionaryEditor(existing: entry, taken: takenPhrases.subtracting([entry.phrase])) {
+            DictionaryEditor(
+                existing: entry,
+                taken: takenPhrases.subtracting([entry.phrase.lowercased()])
+            ) {
                 phrase, misheard in
                 entry.phrase = phrase
                 entry.misheardAs = misheard

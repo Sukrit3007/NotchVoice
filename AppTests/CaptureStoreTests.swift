@@ -45,6 +45,21 @@ struct CaptureStoreTests {
         #expect(try await store.captureCount() == 2)
     }
 
+    @Test("an existing on-disk store can be reopened without losing captures")
+    func reopensExistingStore() async throws {
+        let url = FileManager.default.temporaryDirectory
+            .appending(path: "notchvoice-store-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let configuration = ModelConfiguration(schema: DataStack.schema, url: url)
+
+        let first = try ModelContainer(for: DataStack.schema, configurations: configuration)
+        try await CaptureStore(modelContainer: first).record(draft(text: "kept after relaunch"))
+
+        let reopened = try ModelContainer(for: DataStack.schema, configurations: configuration)
+        let captures = try ModelContext(reopened).fetch(FetchDescriptor<Capture>())
+        #expect(captures.map(\.text) == ["kept after relaunch"])
+    }
+
     @Test("totals add up across captures")
     func totalsAggregate() async throws {
         let store = try store()

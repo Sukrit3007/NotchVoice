@@ -29,7 +29,7 @@ public enum IslandMetrics {
     public static let idleLeadingWing: CGFloat = 26
 
     /// Left wing while a dictation is in flight. Holds one SF Symbol at 12pt.
-    public static let expandedLeadingWing: CGFloat = 34
+    public static let expandedLeadingWing: CGFloat = 36
 
     /// Right wing carrying the live meter.
     ///
@@ -40,14 +40,14 @@ public enum IslandMetrics {
     public static let waveformTrailingWing: CGFloat = 44
 
     /// Right wing carrying a short word — "Done", "Short", "⌘V".
-    public static let labelTrailingWing: CGFloat = 44
+    public static let labelTrailingWing: CGFloat = 48
 
     /// Right wing carrying a short sentence — "Nothing heard".
     ///
     /// Wider than the others on purpose. The island resizes per state, so the
     /// one state that has something to say is allowed to be the widest rather
     /// than forcing every state to carry its width.
-    public static let messageTrailingWing: CGFloat = 58
+    public static let messageTrailingWing: CGFloat = 60
 
     // MARK: - Waveform
 

@@ -3,6 +3,7 @@
 # Cuts a release: build, sign, package, publish, and tell existing copies.
 #
 #     Tools/release.sh 0.1.1
+#     Tools/release.sh --dry-run 0.1.1
 #
 # Everything after the build is ordered so that nothing points at something
 # that does not exist yet: the GitHub release carrying the .dmg is created
@@ -12,41 +13,78 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+DRY_RUN=false
+if [[ "${1:-}" == "--dry-run" ]]; then
+    DRY_RUN=true
+    shift
+fi
+
 VERSION="${1:-}"
 IDENTITY="Notch Voice Developer"
 REPO="Sukrit3007/NotchVoice"
 APP_NAME="Notch Voice"
+BUNDLE_ID="com.sukrit.notchvoice"
+# This is the certificate root recorded in docs/versioning.md. A replacement
+# certificate would reset TCC grants for every existing installation.
+EXPECTED_CERT_ROOT="7a43b25bb89f2ee2fa226f289021c5350470956d"
 DMG="build/NotchVoice-$VERSION.dmg"
+TAG="v$VERSION"
 
 die() { echo "error: $*" >&2; exit 1; }
 
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
     || die "usage: Tools/release.sh <major.minor.patch>"
 
+IFS=. read -r MAJOR MINOR PATCH <<< "$VERSION"
+(( MAJOR < 100 && MINOR < 100 && PATCH < 100 )) \
+    || die "version components must each be below 100"
+
+if [[ "$DRY_RUN" == true ]]; then
+    LATEST_TAG="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -n 1)"
+    if [[ -n "$LATEST_TAG" && "$LATEST_TAG" != "$TAG" ]]; then
+        [[ "$(printf '%s\n' "${LATEST_TAG#v}" "$VERSION" | sort -V | head -n 1)" == "${LATEST_TAG#v}" ]] \
+            || die "$VERSION is older than the latest release $LATEST_TAG"
+    fi
+    Tools/release-notes.sh "$VERSION" >/dev/null \
+        || die "release notes are missing or invalid for $VERSION"
+    echo "dry run ok — $VERSION is valid, ordered after ${LATEST_TAG:-no existing tag}, and has release notes"
+    exit 0
+fi
+
 # --- Refuse to start if anything the later steps need is missing ------------
 # All checked up front. A release that dies after signing but before publishing
 # leaves a tag pointing at a version nobody can download.
 
 [[ -z "$(git status --porcelain)" ]] || die "working tree is dirty; commit first"
-git rev-parse "v$VERSION" >/dev/null 2>&1 && die "tag v$VERSION already exists"
+if git rev-parse "$TAG" >/dev/null 2>&1; then
+    echo "==> resuming existing $TAG"
+fi
+
+LATEST_TAG="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -n 1)"
+if [[ -n "$LATEST_TAG" && "$LATEST_TAG" != "$TAG" ]]; then
+    [[ "$(printf '%s\n' "${LATEST_TAG#v}" "$VERSION" | sort -V | head -n 1)" == "${LATEST_TAG#v}" ]] \
+        || die "$VERSION is older than the latest release $LATEST_TAG"
+fi
 
 security find-identity -v -p codesigning | grep -q "$IDENTITY" \
     || die "no '$IDENTITY' signing identity — see Tools/make-cert.sh"
 
 gh auth status >/dev/null 2>&1 || die "gh is not logged in"
 
-SPARKLE_BIN="$(find "$HOME/Library/Developer/Xcode/DerivedData" \
-    -path "*artifacts/sparkle/Sparkle/bin" -print -quit 2>/dev/null || true)"
-[[ -n "$SPARKLE_BIN" ]] || die "Sparkle tools not found — build the app once first"
+if [[ -d "/Applications/Xcode.app/Contents/Developer" ]]; then
+    export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
+fi
 
 xcrun --find metal >/dev/null 2>&1 \
     || die "Metal toolchain missing — run: xcodebuild -downloadComponent MetalToolchain"
+
+mkdir -p build
+Tools/release-notes.sh "$VERSION" > build/release-notes.md
 
 # --- Version -----------------------------------------------------------------
 # CFBundleVersion has to increase monotonically or Sparkle will not offer the
 # update. Derived from the marketing version rather than hand-incremented, so
 # the two can never disagree about which build is newer.
-IFS=. read -r MAJOR MINOR PATCH <<< "$VERSION"
 BUILD=$(( MAJOR * 10000 + MINOR * 100 + PATCH ))
 
 echo "==> $APP_NAME $VERSION (build $BUILD)"
@@ -65,7 +103,23 @@ xcodegen generate >/dev/null
 #
 # `-skipPackagePluginValidation` is required by mlx-swift, which ships a build
 # tool plugin Xcode will not run unattended.
-rm -rf build
+rm -rf build/dd build/stage "$DMG"
+echo "==> Core tests"
+swift test --package-path Core --scratch-path build/core-scratch --cache-path build/spm-cache
+echo "==> SoundGen tests"
+swift test --package-path Tools/SoundGen --scratch-path build/soundgen-scratch --cache-path build/spm-cache
+echo "==> app-hosted tests"
+xcodebuild test \
+    -project NotchVoice.xcodeproj -scheme NotchVoice \
+    -destination 'platform=macOS' \
+    -derivedDataPath build/dd \
+    -skipPackagePluginValidation -skipMacroValidation \
+    CODE_SIGNING_ALLOWED=NO \
+    CODE_SIGN_IDENTITY="" \
+    DEVELOPMENT_TEAM="" \
+    2>&1 | tee build/app-tests.log
+
+echo "==> Release build"
 xcodebuild build \
     -project NotchVoice.xcodeproj -scheme NotchVoice \
     -configuration Release -destination 'platform=macOS' \
@@ -75,10 +129,13 @@ xcodebuild build \
     CODE_SIGN_IDENTITY="$IDENTITY" \
     DEVELOPMENT_TEAM="" \
     OTHER_CODE_SIGN_FLAGS="--timestamp=none" \
-    | grep -E "error:|warning:|BUILD" || true
+    2>&1 | tee build/xcodebuild.log
 
 APP="build/dd/Build/Products/Release/$APP_NAME.app"
 [[ -d "$APP" ]] || die "build produced no app"
+
+SPARKLE_BIN="$(find build/dd/SourcePackages/artifacts -path '*/Sparkle/bin' -print -quit 2>/dev/null || true)"
+[[ -n "$SPARKLE_BIN" ]] || die "Sparkle tools not found in the current build"
 
 # --- Re-sign Sparkle's nested tools -----------------------------------------
 # Xcode signs the app and the framework, but not the bundles *inside* the
@@ -143,7 +200,12 @@ codesign -d --entitlements - --xml "$APP" 2>/dev/null | grep -q "get-task-allow"
 echo "==> signature"
 codesign --verify --deep --strict --verbose=2 "$APP" 2>&1 | sed 's/^/    /'
 echo "==> designated requirement (must match the last release exactly)"
-codesign -d -r- "$APP" 2>&1 | grep "designated" | sed 's/^/    /'
+DESIGNATED_REQUIREMENT="$(codesign -d -r- "$APP" 2>&1 | grep "designated")"
+echo "    $DESIGNATED_REQUIREMENT"
+grep -Fq "identifier \"$BUNDLE_ID\"" <<< "$DESIGNATED_REQUIREMENT" \
+    || die "designated requirement has the wrong bundle identifier"
+grep -Fq "certificate root = H\"$EXPECTED_CERT_ROOT\"" <<< "$DESIGNATED_REQUIREMENT" \
+    || die "designated requirement has the wrong signing certificate root"
 
 # --- Package -----------------------------------------------------------------
 # hdiutil rather than create-dmg: a dictation app does not need a background
@@ -171,27 +233,41 @@ echo "    $SIG_LINE"
 # appcast does.
 echo "==> publishing"
 git add project.yml
-git commit -qm "chore: release $VERSION" || true
-git tag -a "v$VERSION" -m "$APP_NAME $VERSION"
-git push -q origin HEAD --tags
+if ! git diff --cached --quiet; then
+    git commit -qm "chore: release $VERSION"
+fi
+if ! git rev-parse "$TAG" >/dev/null 2>&1; then
+    git tag -a "$TAG" -m "$APP_NAME $VERSION"
+fi
+git push -q origin "$TAG"
 
-gh release create "v$VERSION" "$DMG" \
-    --repo "$REPO" \
-    --title "$APP_NAME $VERSION" \
-    --notes-file <(Tools/release-notes.sh "$VERSION")
+if ! gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+    gh release create "$TAG" "$DMG" \
+        --repo "$REPO" \
+        --title "$APP_NAME $VERSION" \
+        --notes-file build/release-notes.md
+else
+    echo "    GitHub release $TAG already exists; leaving it unchanged"
+fi
 
 # --- Tell everyone already running it ---------------------------------------
 DOWNLOAD_URL="https://github.com/$REPO/releases/download/v$VERSION/$(basename "$DMG")"
-python3 Tools/appcast.py \
-    --version "$VERSION" \
-    --build "$BUILD" \
-    --url "$DOWNLOAD_URL" \
-    --signature "$SIG_LINE" \
-    --appcast appcast.xml
+if [[ ! -f appcast.xml ]] || ! grep -q "<sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>" appcast.xml; then
+    python3 Tools/appcast.py \
+        --version "$VERSION" \
+        --build "$BUILD" \
+        --url "$DOWNLOAD_URL" \
+        --signature "$SIG_LINE" \
+        --appcast appcast.xml
+fi
 
 git add appcast.xml
-git commit -qm "chore: appcast for $VERSION"
-git push -q origin HEAD
+if ! git diff --cached --quiet; then
+    git commit -qm "chore: appcast for $VERSION"
+    git push -q origin HEAD
+else
+    echo "    appcast already contains $VERSION; leaving it unchanged"
+fi
 
 echo
 echo "==> done — $VERSION is live"

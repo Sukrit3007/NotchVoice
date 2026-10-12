@@ -77,6 +77,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   app is signed with. Permission grants are keyed to it, so a build signed by a
   different identity — granted in System Settings, refused anyway — can now be
   told apart from a real denial in Console.
+- Snippets expand after cleanup instead of before it, so an address, a sign-off
+  or a link arrives exactly as you wrote it rather than tidied like speech.
+  Dictionary corrections still run first, so cleanup works on the right words.
 
 ### Removed
 

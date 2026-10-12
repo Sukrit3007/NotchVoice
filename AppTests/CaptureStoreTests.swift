@@ -150,25 +150,27 @@ struct CaptureStoreTests {
         context.insert(DictionaryEntry(phrase: "Kubernetes", misheardAs: "cuber netties"))
         try context.save()
 
-        let rules = try await CaptureStore(modelContainer: stack.container).rewriteRules()
+        let rules = try await CaptureStore(modelContainer: stack.container).rewriteRules(.corrections)
         #expect(rules.count == 1)
         #expect(rules.first?.match == "cuber netties")
         #expect(rules.first?.replacement == "Kubernetes")
     }
 
-    @Test("snippets and dictionary corrections come back as one rule set")
-    func rulesIncludeSnippets() async throws {
-        // One pass over both, so a snippet cannot expand into text that a
-        // dictionary rule then rewrites again.
+    @Test("corrections and snippets come back as separate rule sets")
+    func snippetsAreTheirOwnRules() async throws {
+        // Run at different points: corrections before polish, so it tidies
+        // the right words; snippets after it, so it never rewords an expansion.
         let stack = try DataStack.inMemory()
         let context = ModelContext(stack.container)
         context.insert(DictionaryEntry(phrase: "WhisperKit", misheardAs: "whisper kit"))
         context.insert(Snippet(trigger: "my address", expansion: "221B Baker Street"))
         try context.save()
 
-        let rules = try await CaptureStore(modelContainer: stack.container).rewriteRules()
-        #expect(rules.count == 2)
-        #expect(rules.contains { $0.replacement == "221B Baker Street" })
+        let store = CaptureStore(modelContainer: stack.container)
+        let corrections = try await store.rewriteRules(.corrections)
+        let snippets = try await store.rewriteRules(.snippets)
+        #expect(corrections.map(\.replacement) == ["WhisperKit"])
+        #expect(snippets.map(\.replacement) == ["221B Baker Street"])
     }
 
     @Test("a fired rule is counted against whichever kind it was")

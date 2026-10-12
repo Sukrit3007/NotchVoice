@@ -540,16 +540,20 @@ final class DictationCoordinator {
                     return
                 }
 
-                // Rewrites run **before** polish, not after. Polish is told to
-                // preserve the user's wording; handing it a transcript that
-                // still says "cuber netties" means it tidies around the error,
-                // and a snippet expanded afterwards would arrive unpolished.
-                let corrected = await rewrite(raw)
+                // Corrections run **before** polish. Polish is told to preserve
+                // the user's wording; handing it a transcript that still says
+                // "cuber netties" means it tidies around the error.
+                let corrected = await rewrite(raw, .corrections)
 
                 // Only the live dictation shows a polishing state; a late one
                 // still polishes and delivers, it just does not touch the island.
                 if session == self.session { setPhase(.polishing) }
-                let text = await polisher.polish(corrected)
+                let polished = await polisher.polish(corrected)
+
+                // Snippets run **after** it. An expansion is text the user
+                // wrote out in advance — an address, a sign-off, a link — and
+                // polish would reword or reformat it like speech.
+                let text = await rewrite(polished, .snippets)
 
                 let outcome = await Paster.deliver(text, to: target)
                 Log.deliver.info(
@@ -655,13 +659,13 @@ final class DictationCoordinator {
         return BiasPrompt.build(terms: terms, context: context)
     }
 
-    /// Applies dictionary corrections and snippet expansions.
+    /// Applies dictionary corrections or snippet expansions.
     ///
     /// Counting which rules fired is deliberately not awaited — a statistic must
     /// never be on the path between the user's words and their document.
-    private func rewrite(_ text: String) async -> String {
+    private func rewrite(_ text: String, _ kind: RewriteKind) async -> String {
         do {
-            let rules = try await store.rewriteRules()
+            let rules = try await store.rewriteRules(kind)
             guard !rules.isEmpty else { return text }
 
             let result = TranscriptRewriter.apply(rules, to: text)

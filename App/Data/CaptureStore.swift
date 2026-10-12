@@ -55,20 +55,21 @@ actor CaptureStore {
             .map(\.phrase)
     }
 
-    /// Every rewrite to run over a finished transcript.
+    /// The rewrites of one kind to run over a transcript.
     ///
-    /// Dictionary corrections and snippet expansions in one list, because they
-    /// are the same operation and running them in two passes would let one
-    /// rewrite the output of the other.
-    func rewriteRules() throws -> [TranscriptRewriter.Rule] {
-        let entries = try modelContext.fetch(FetchDescriptor<DictionaryEntry>())
-        let snippets = try modelContext.fetch(FetchDescriptor<Snippet>())
-
-        return entries.compactMap { entry in
-            guard let misheard = entry.misheardAs, !misheard.isEmpty else { return nil }
-            return TranscriptRewriter.Rule(match: misheard, replacement: entry.phrase)
-        } + snippets.map {
-            TranscriptRewriter.Rule(match: $0.trigger, replacement: $0.expansion)
+    /// The same operation, run at two different points: corrections before
+    /// polish, snippets after it — see `DictationCoordinator`.
+    func rewriteRules(_ kind: RewriteKind) throws -> [TranscriptRewriter.Rule] {
+        switch kind {
+        case .corrections:
+            return try modelContext.fetch(FetchDescriptor<DictionaryEntry>()).compactMap { entry in
+                guard let misheard = entry.misheardAs, !misheard.isEmpty else { return nil }
+                return TranscriptRewriter.Rule(match: misheard, replacement: entry.phrase)
+            }
+        case .snippets:
+            return try modelContext.fetch(FetchDescriptor<Snippet>()).map {
+                TranscriptRewriter.Rule(match: $0.trigger, replacement: $0.expansion)
+            }
         }
     }
 
@@ -109,6 +110,13 @@ actor CaptureStore {
         try modelContext.delete(model: Capture.self)
         try modelContext.save()
     }
+}
+
+enum RewriteKind: Sendable {
+    /// Dictionary entries with a misheard form: what the model got wrong.
+    case corrections
+    /// Snippet triggers: shorthand the user said on purpose.
+    case snippets
 }
 
 /// A capture before it exists — plain values, so it can cross into the actor.

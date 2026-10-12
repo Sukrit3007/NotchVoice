@@ -80,9 +80,8 @@ final class ModifierTap {
     /// How often to confirm macOS has not quietly switched the tap off.
     private static let watchdogInterval = Duration.seconds(2)
 
-    /// How often to ask the hardware whether the binding is really still held,
-    /// while the tap believes it is.
-    private static let heldKeyCheckInterval = Duration.seconds(1)
+    /// Gap between the two hardware readings a lost key-up repair needs.
+    private static let heldKeyRecheckDelay = Duration.milliseconds(500)
 
     /// Waits between attempts to bring back a tap whose rebuild failed. The
     /// last one repeats for as long as it takes.
@@ -266,7 +265,6 @@ final class ModifierTap {
 
         switch event {
         case let .keyDown(at):
-            watchHeldKey()
             onKeyDown?(at)
         case let .keyUp(at):
             heldKeyCheck?.cancel()
@@ -309,6 +307,8 @@ final class ModifierTap {
     }
 
     private func noteDisable() {
+        // Events may have gone missing while the tap was off.
+        repairHeldKey()
         guard disables.noteDisable(at: ProcessInfo.processInfo.systemUptime) else { return }
         Log.input.error("Tap keeps being disabled — rebuilding it")
         removeTap()
@@ -332,6 +332,9 @@ final class ModifierTap {
                 if installVerifiedTap() {
                     Log.input.notice("Tap rebuilt on retry \(attempt + 1, privacy: .public)")
                     onAvailabilityChange?(true)
+                    // A key believed held through the outage would otherwise
+                    // swallow the next real press as "no change".
+                    repairHeldKey()
                     return
                 }
             }
@@ -364,36 +367,39 @@ final class ModifierTap {
     private func didWake() {
         disables.noteWake(at: ProcessInfo.processInfo.systemUptime)
         reenableIfDisabled()
+        repairHeldKey()
     }
 
-    /// Repairs a key-up the tap never saw.
+    /// Repairs a key-up the tap may have missed.
     ///
-    /// The tap knows the key's state only from events, so a release that
-    /// happens while it is disabled or being rebuilt is simply missed — and the
-    /// hold then runs on to the 300s cap. While the key is believed held, this
-    /// asks the hardware instead.
+    /// The tap knows the key's state only from events, so a release while it
+    /// was disabled, being rebuilt or asleep is simply missed — and the hold
+    /// then runs on to the 300s cap. So after exactly those moments, and never
+    /// during an ordinary hold, this asks the hardware instead.
     ///
-    /// Cautious on purpose, because cutting a real hold short loses the user's
-    /// words: it reads the family flag, whose absence proves the key is up, and
-    /// acts only on two such readings in a row.
-    private func watchHeldKey() {
+    /// Only then because it trusts the HID modifier flags to show the key
+    /// while it is held. The family flags make that likely, but it is not
+    /// proven for fn on every keyboard, and a wrong "released" would cut the
+    /// user off mid-sentence. Even then it needs two readings, half a second
+    /// apart, both saying released.
+    private func repairHeldKey() {
+        guard state.isBindingKeyDown else { return }
         heldKeyCheck?.cancel()
         heldKeyCheck = Task { [weak self] in
-            var releasedReadings = 0
-            while !Task.isCancelled {
-                try? await Task.sleep(for: Self.heldKeyCheckInterval)
-                guard let self, !Task.isCancelled else { return }
-                let flags = CGEventSource.flagsState(.hidSystemState)
-                releasedReadings = flags.contains(binding.familyFlag) ? 0 : releasedReadings + 1
-                guard releasedReadings >= 2 else { continue }
-                if let at = state.forceRelease() {
-                    Log.input.notice(
-                        "\(self.binding.displayName, privacy: .public) is up but its release never arrived — releasing")
-                    onKeyUp?(at)
-                }
-                return
+            guard let self, !isHeldInHardware() else { return }
+            try? await Task.sleep(for: Self.heldKeyRecheckDelay)
+            guard !Task.isCancelled, !isHeldInHardware() else { return }
+            if let at = state.forceRelease() {
+                Log.input.notice(
+                    "\(self.binding.displayName, privacy: .public) is up but its release never arrived — releasing")
+                onKeyUp?(at)
             }
         }
+    }
+
+    /// The family flag, whose absence proves the key is up.
+    private func isHeldInHardware() -> Bool {
+        CGEventSource.flagsState(.hidSystemState).contains(binding.familyFlag)
     }
 }
 
@@ -481,6 +487,8 @@ private final class TapState: Sendable {
         get { fields.withLock { $0.canPasteLast } }
         set { fields.withLock { $0.canPasteLast = newValue } }
     }
+
+    var isBindingKeyDown: Bool { fields.withLock { $0.isBindingKeyDown } }
 
     func setPort(_ port: CFMachPort?) {
         let ref = port.map(PortRef.init)

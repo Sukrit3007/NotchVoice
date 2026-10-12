@@ -15,7 +15,9 @@ enum PasteOutcome {
 /// dictate into. Clipboard plus a synthetic ⌘V works everywhere.
 ///
 /// **The paste is proved, not assumed** — the text is staged as a `PastePromise`
-/// whose data-provider callback is evidence the target actually read it.
+/// whose data-provider callback is evidence the target actually read it, and
+/// where the target field exposes its length and selection, they are watched
+/// until the paste shows up there. See `PasteLanding`.
 ///
 /// The original clipboard is snapshotted at full fidelity and put back
 /// afterwards — but only when the paste was consumed *and* nothing else wrote in
@@ -41,6 +43,16 @@ enum Paster {
     /// Time for a refocused field to become first responder before ⌘V lands.
     /// Only paid when focus actually had to be moved.
     private static let refocusSettleDelay = Duration.milliseconds(50)
+    /// How long to watch the field for the paste to show up after the target
+    /// read it. Web views and Electron apps apply a paste a beat after reading
+    /// the clipboard, and calling a paste that did land "copied only" invites
+    /// the user to paste it twice. Polling returns as soon as it shows, so the
+    /// full wait is only paid when it never does.
+    private static let landingTimeout = Duration.milliseconds(500)
+    private static let landingPollInterval = Duration.milliseconds(50)
+    /// Bounds each read of the field's length and selection.
+    private static let fieldReadBudget: TimeInterval = 0.1
+    private static let fieldReadCallCap: TimeInterval = 0.05
 
     static func isAccessibilityTrusted() -> Bool {
         AXIsProcessTrusted()
@@ -87,6 +99,11 @@ enum Paster {
             await refocus(element.raw, in: focus.pid)
         }
 
+        // Read after refocusing, so it describes the field the paste is about
+        // to land in. Nil when there is nothing to compare against later.
+        let field = pasteTarget(in: focus.pid)
+        let before = field.flatMap(fieldState)
+
         let snapshot = ClipboardSnapshot.capture()
 
         let promise = PastePromise(text: text)
@@ -110,6 +127,15 @@ enum Paster {
             // report it as merely-copied at the same time, which is the worst of
             // both. Re-written as plain text so it survives the promise going
             // out of scope.
+            writePlainText(text)
+            return .copiedOnly
+        }
+
+        // Read is not the same as landed: a field that cannot take text, or a
+        // clipboard manager answering in the target's place, both satisfy the
+        // promise. Same handling as an unread paste, and for the same reason.
+        if let field, let before, await !landed(in: field, before: before) {
+            Log.deliver.notice("Paste was read but the field did not change — copied only")
             writePlainText(text)
             return .copiedOnly
         }
@@ -148,6 +174,52 @@ enum Paster {
         Log.deliver.info("Focus had moved within the app — refocused: \(refocused, privacy: .public)")
         if refocused {
             try? await Task.sleep(for: refocusSettleDelay)
+        }
+    }
+
+    /// The element about to receive the paste, if it can be checked afterwards.
+    ///
+    /// Requires a readable role, and refuses a secure field: even a password's
+    /// length is not this app's business.
+    @MainActor
+    private static func pasteTarget(in pid: pid_t) -> AXUIElement? {
+        let budget = AX.budget(total: fieldReadBudget, perCallCap: fieldReadCallCap)
+        let app = AXUIElementCreateApplication(pid)
+        guard let element = AX.element(kAXFocusedUIElementAttribute, of: app, within: budget),
+              let role = AX.string(kAXRoleAttribute, of: element, within: budget),
+              role != "AXSecureTextField"
+        else { return nil }
+        return element
+    }
+
+    /// The field's length and selection — two numbers, never its text.
+    @MainActor
+    private static func fieldState(of element: AXUIElement) -> PasteLanding.FieldState? {
+        let budget = AX.budget(total: fieldReadBudget, perCallCap: fieldReadCallCap)
+        guard let count = AX.int(kAXNumberOfCharactersAttribute, of: element, within: budget),
+              let selection = AX.range(kAXSelectedTextRangeAttribute, of: element, within: budget)
+        else { return nil }
+        return PasteLanding.FieldState(
+            characterCount: count,
+            selectionLocation: selection.location,
+            selectionLength: selection.length)
+    }
+
+    /// Watches the field until the paste shows up, or the timeout passes.
+    ///
+    /// A field that stops being readable part-way counts as landed: that is not
+    /// evidence of a failure, and the promise already said the target read it.
+    @MainActor
+    private static func landed(
+        in field: AXUIElement, before: PasteLanding.FieldState
+    ) async -> Bool {
+        var waited = Duration.zero
+        while true {
+            let verdict = PasteLanding.verdict(before: before, after: fieldState(of: field))
+            if verdict != .notLanded { return true }
+            guard waited < landingTimeout else { return false }
+            try? await Task.sleep(for: landingPollInterval)
+            waited += landingPollInterval
         }
     }
 

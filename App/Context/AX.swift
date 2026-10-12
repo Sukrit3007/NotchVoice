@@ -33,6 +33,23 @@ enum AX {
         copy(attribute, of: element, within: budget) as? String
     }
 
+    static func int(
+        _ attribute: String, of element: AXUIElement, within budget: AXBudget
+    ) -> Int? {
+        copy(attribute, of: element, within: budget) as? Int
+    }
+
+    static func range(
+        _ attribute: String, of element: AXUIElement, within budget: AXBudget
+    ) -> CFRange? {
+        guard let value = copy(attribute, of: element, within: budget),
+              CFGetTypeID(value) == AXValueGetTypeID()
+        else { return nil }
+        var range = CFRange()
+        guard AXValueGetValue(value as! AXValue, .cfRange, &range) else { return nil }
+        return range
+    }
+
     @discardableResult
     static func perform(
         _ action: String, on element: AXUIElement, within budget: AXBudget

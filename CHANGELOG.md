@@ -94,6 +94,11 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   paste is marked transient and concealed, the nspasteboard.org convention that
   clipboard managers honour. Copy-only results stay unmarked, since that text is
   meant to stay on the clipboard.
+- "Done" no longer appears for a paste that was read but never arrived — a
+  field that cannot take text, or a clipboard manager answering in the target's
+  place. Where the field exposes its length and selection, both are compared
+  before and after for up to half a second; if neither moved, the text stays on
+  the clipboard and the notch says so. The field's text is never read for this.
 
 ## [0.1.0] - 2026-09-08
 

@@ -66,6 +66,7 @@ xcodebuild test \
     -skipPackagePluginValidation \
     -only-testing:NotchVoiceTests/DictationBench \
     ENABLE_TESTABILITY=YES \
+    ONLY_ACTIVE_ARCH=YES \
     >"$out/xcodebuild.log" 2>&1 || {
         tail -30 "$out/xcodebuild.log" >&2
         echo "xcodebuild failed; full log: $out/xcodebuild.log" >&2

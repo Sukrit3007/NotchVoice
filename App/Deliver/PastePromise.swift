@@ -17,6 +17,20 @@ final class PastePromise: NSObject, NSPasteboardItemDataProvider {
     /// How often to re-check while waiting. See `waitForConsumption(within:)`.
     private static let pollInterval = Duration.milliseconds(10)
 
+    /// Markers from nspasteboard.org, which clipboard managers honour.
+    ///
+    /// Transient: the item is on the pasteboard only for the length of one
+    /// paste, so it should not be recorded at all. Concealed: it may be
+    /// sensitive — dictated text can be an address or a password — so a
+    /// manager that records it anyway should not show it. A manager that skips
+    /// the item also never asks for the string, so it cannot satisfy the
+    /// promise in the target's place. Written as empty data: being present is
+    /// the whole message.
+    private static let markerTypes: [NSPasteboard.PasteboardType] = [
+        NSPasteboard.PasteboardType("org.nspasteboard.TransientType"),
+        NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"),
+    ]
+
     private let text: String
 
     /// Behind a lock because AppKit calls the data provider on whichever thread
@@ -40,6 +54,9 @@ final class PastePromise: NSObject, NSPasteboardItemDataProvider {
     func write() -> Int {
         let item = NSPasteboardItem()
         item.setDataProvider(self, forTypes: [.string])
+        for type in Self.markerTypes {
+            item.setData(Data(), forType: type)
+        }
 
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()

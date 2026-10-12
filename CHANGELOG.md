@@ -90,6 +90,10 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   another field or tab of the same app while it was transcribing. The focused
   element is remembered at key-down and focused again before ⌘V; if it is gone,
   the paste goes wherever focus is, as before.
+- Dictations no longer land in clipboard-manager history. The text staged for a
+  paste is marked transient and concealed, the nspasteboard.org convention that
+  clipboard managers honour. Copy-only results stay unmarked, since that text is
+  meant to stay on the clipboard.
 
 ## [0.1.0] - 2026-09-08
 

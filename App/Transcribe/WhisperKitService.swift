@@ -1,4 +1,3 @@
-import CoreML
 import Foundation
 import NotchVoiceCore
 @preconcurrency import WhisperKit
@@ -132,14 +131,7 @@ actor WhisperKitService {
             load: true,
             download: false
         )
-        let pipe = try await WhisperKit(config)
-        // Without this, WhisperKit 0.x can return an empty transcript for any
-        // dictation with custom words or screen text. See `PromptPrefill`.
-        if let tokenizer = pipe.tokenizer {
-            pipe.textDecoder.logitsFilters = (pipe.textDecoder.logitsFilters ?? [])
-                + [PrefillEndOfTextGuard(specialTokens: tokenizer.specialTokens)]
-        }
-        self.pipe = pipe
+        pipe = try await WhisperKit(config)
     }
 
     /// Transcribes, optionally biased toward a prompt.
@@ -192,32 +184,5 @@ actor WhisperKitService {
 
         guard !text.isEmpty else { throw TranscriptionError.empty }
         return text
-    }
-}
-
-/// Holds end-of-text back until a prompted decode has produced a token of its
-/// own, so the prompt being fed in cannot end it. A no-op without a prompt.
-///
-/// Remove once WhisperKit is 1.1.0 or later, which fixes this in its decode
-/// loop (argmax-oss-swift #514).
-private final class PrefillEndOfTextGuard: LogitsFiltering {
-    private let startOfPrevious: Int
-    private let lastPrefillToken: Int
-    private let endOfText: [[NSNumber]]
-
-    init(specialTokens: SpecialTokens) {
-        startOfPrevious = specialTokens.startOfPreviousToken
-        // `transcribe` always decodes without timestamps, which ends the
-        // prefill on this token.
-        lastPrefillToken = specialTokens.noTimestampsToken
-        endOfText = [[0, 0, specialTokens.endToken as NSNumber]]
-    }
-
-    func filterLogits(_ logits: MLMultiArray, withTokens tokens: [Int]) -> MLMultiArray {
-        guard PromptPrefill.isAwaitingFirstToken(
-            tokens, startOfPrevious: startOfPrevious, lastPrefillToken: lastPrefillToken)
-        else { return logits }
-        logits.fill(indexes: endOfText, with: -FloatType.infinity)
-        return logits
     }
 }

@@ -115,9 +115,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Dictation no longer comes back empty when you have custom words, or when
   "Use what's on screen" finds text in the field. Either one gives the speech
   model a prompt, and the speech library (WhisperKit 0.x) could end a prompted
-  transcript before its first word. Custom words are also handed over the way
-  Whisper expects, so `fetchUserProfile` lands as written rather than as
-  "FetchUserProfile".
+  transcript before its first word; it is now WhisperKit 1.1, which fixes that.
+  Custom words are also handed over the way Whisper expects, so
+  `fetchUserProfile` lands as written rather than as "FetchUserProfile".
 - The first words of a dictation are no longer clipped when the app being
   dictated into is slow to answer. The microphone starts the instant the key
   goes down; reading the field for context now happens after it, off the main

@@ -15,6 +15,11 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   takes `⌃⌘V` only once there is a transcript to paste. Fixed rather than
   rebindable: the existing hotkey setting picks one modifier key and has no
   shortcut recorder to reuse.
+- The menu bar explains when Secure Input is blocking the keyboard. While
+  another app holds it — Terminal's Secure Keyboard Entry, a password manager
+  that never let go — macOS keeps keystrokes from the app and the hotkey just
+  stopped responding. After five seconds the glyph turns ⚠️ and the menu names
+  the app holding it. A password field's brief hold is not mentioned.
 - An optional local cleanup model, offered in Settings → Cleanup. A 2.3GB
   download that runs entirely on this Mac and formats better than Apple
   Intelligence does — paragraphs where you change subject, lists where you list

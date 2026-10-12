@@ -11,6 +11,7 @@ final class MenuBarController {
     private let coordinator: DictationCoordinator
     private let library: LibraryWindowController
     private let updates: UpdateController
+    private let secureInput = SecureInputMonitor()
 
     /// What the glyph currently shows, so a readiness change that does not cross
     /// the blocked/not-blocked line does not touch the button.
@@ -39,8 +40,9 @@ final class MenuBarController {
         }
         item.menu = buildMenu()
         statusItem = item
-        applyIcon(for: coordinator.readiness)
+        applyIcon()
 
+        secureInput.start()
         observeReadiness()
 
         Log.settings.info("Menu bar item installed")
@@ -60,10 +62,11 @@ final class MenuBarController {
     private func observeReadiness() {
         withObservationTracking {
             _ = coordinator.readiness
+            _ = secureInput.isBlocking
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                applyIcon(for: coordinator.readiness)
+                applyIcon()
                 observeReadiness()
             }
         }
@@ -76,12 +79,16 @@ final class MenuBarController {
     /// the menu bar, does not invert when the menu is open, and cannot carry a
     /// badge. The warning is therefore signalled by swapping the whole glyph
     /// rather than by badging it.
-    private func applyIcon(for readiness: DictationCoordinator.Readiness) {
-        let blocked: Bool
-        switch readiness {
+    ///
+    /// Secure Input held by another app counts as blocked too: from the user's
+    /// side it looks exactly like a missing permission — the key does nothing.
+    private func applyIcon() {
+        var blocked: Bool
+        switch coordinator.readiness {
         case .needsPermission, .modelUnavailable: blocked = true
         case .ready, .loadingModel: blocked = false
         }
+        if secureInput.isBlocking { blocked = true }
 
         guard blocked != shownAsBlocked else { return }
         shownAsBlocked = blocked
@@ -124,6 +131,22 @@ final class MenuBarController {
         )
         header.isEnabled = false
         menu.addItem(header)
+
+        // Directly under the line it qualifies.
+        if secureInput.isBlocking {
+            let holder = secureInput.holderName ?? "another app"
+            let warning = NSMenuItem(
+                title: "Secure Input is on in \(holder)", action: nil, keyEquivalent: "")
+            warning.isEnabled = false
+            warning.toolTip = "While it is on, macOS keeps keystrokes from Notch Voice. "
+                + "Password fields and Terminal's Secure Keyboard Entry turn it on."
+            menu.addItem(warning)
+
+            let consequence = NSMenuItem(
+                title: "Shortcuts may not respond until it's off", action: nil, keyEquivalent: "")
+            consequence.isEnabled = false
+            menu.addItem(consequence)
+        }
         menu.addItem(.separator())
 
         let status = PermissionChecker.status()

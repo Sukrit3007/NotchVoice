@@ -234,6 +234,7 @@ final class DictationCoordinator {
         tap.onOtherKey = { [weak self] in self?.dispatchIfActive(.otherKeyPressed) }
         tap.onEscape = { [weak self] in self?.dispatchIfActive(.escapePressed) }
         tap.onPasteLast = { [weak self] in self?.pasteLast() }
+        tap.onAvailabilityChange = { [weak self] in self?.tapAvailabilityChanged($0) }
         tap.canPasteLast = lastTranscript != nil
 
         guard tap.start() else {
@@ -252,6 +253,25 @@ final class DictationCoordinator {
             readiness = modelLoaded ? .ready : .loadingModel
         }
         return true
+    }
+
+    /// The tap was lost and could not be rebuilt, or a retry brought it back.
+    ///
+    /// Shown the way a tap that never armed is — `.needsPermission` turns the
+    /// menu bar glyph to ⚠️ — because the likeliest cause is the same: a
+    /// permission revoked or reset while the app was running.
+    private func tapAvailabilityChanged(_ available: Bool) {
+        if available {
+            Log.input.notice("Tap is back")
+            if readiness == .needsPermission {
+                readiness = modelLoaded ? .ready : .loadingModel
+            }
+            return
+        }
+        readiness = .needsPermission
+        // Nothing can deliver the key-up or the stopping tap now. Finish what
+        // was said rather than leave it recording to the cap.
+        if machine.state != .idle { dispatch(.maxDurationReached) }
     }
 
     /// Changes the dictation key and re-arms the tap against it.

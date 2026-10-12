@@ -84,6 +84,12 @@ final class ModifierTap {
     /// while the tap believes it is.
     private static let heldKeyCheckInterval = Duration.seconds(1)
 
+    /// Waits between attempts to bring back a tap whose rebuild failed. The
+    /// last one repeats for as long as it takes.
+    private static let rebuildRetryDelays: [Duration] = [
+        .seconds(1), .seconds(2), .seconds(5), .seconds(10), .seconds(30),
+    ]
+
     /// `let`, not `var`. A tap is built for one binding and thrown away when it
     /// changes — `DictationCoordinator.rebind(to:)` creates a fresh one rather
     /// than mutating this.
@@ -93,6 +99,7 @@ final class ModifierTap {
     private var thread: TapThread?
     private var watchdog: Task<Void, Never>?
     private var heldKeyCheck: Task<Void, Never>?
+    private var rebuildRetry: Task<Void, Never>?
     private var disables = TapDisableTracker()
     private var wakeObserver: (any NSObjectProtocol)?
 
@@ -124,6 +131,10 @@ final class ModifierTap {
     var onOtherKey: (() -> Void)?
     var onEscape: (() -> Void)?
     var onPasteLast: (() -> Void)?
+    /// False when the tap was lost and could not be rebuilt — the hotkey is
+    /// dead and fn opens the emoji picker again — and true when a retry
+    /// brings it back.
+    var onAvailabilityChange: ((Bool) -> Void)?
 
     init(binding: ModifierKey = BindingStore.binding) {
         self.binding = binding
@@ -185,6 +196,8 @@ final class ModifierTap {
         watchdog = nil
         heldKeyCheck?.cancel()
         heldKeyCheck = nil
+        rebuildRetry?.cancel()
+        rebuildRetry = nil
         if let wakeObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
         }
@@ -299,9 +312,43 @@ final class ModifierTap {
         guard disables.noteDisable(at: ProcessInfo.processInfo.systemUptime) else { return }
         Log.input.error("Tap keeps being disabled — rebuilding it")
         removeTap()
-        if !installTap() {
-            Log.input.error("Tap rebuild FAILED — the hotkey is dead until it is re-armed")
+        guard !installVerifiedTap() else { return }
+
+        // Most likely a permission revoked or reset while running. Said out
+        // loud — the coordinator turns it into the same warning as a tap that
+        // never armed — and retried, so a re-grant brings the hotkey back.
+        Log.input.error("Tap rebuild FAILED — the hotkey is dead; retrying")
+        onAvailabilityChange?(false)
+        retryRebuild()
+    }
+
+    private func retryRebuild() {
+        rebuildRetry?.cancel()
+        rebuildRetry = Task { [weak self] in
+            for attempt in 0... {
+                let delays = Self.rebuildRetryDelays
+                try? await Task.sleep(for: delays[min(attempt, delays.count - 1)])
+                guard let self, !Task.isCancelled else { return }
+                if installVerifiedTap() {
+                    Log.input.notice("Tap rebuilt on retry \(attempt + 1, privacy: .public)")
+                    onAvailabilityChange?(true)
+                    return
+                }
+            }
         }
+    }
+
+    /// `installTap()` plus the permissions a consuming tap needs. Without them
+    /// a port can still be created, and it never delivers anything.
+    private func installVerifiedTap() -> Bool {
+        guard installTap() else { return false }
+        guard AXIsProcessTrusted(),
+              IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) == kIOHIDAccessTypeGranted
+        else {
+            removeTap()
+            return false
+        }
+        return true
     }
 
     private func observeWake() {

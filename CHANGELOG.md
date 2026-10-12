@@ -97,8 +97,10 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The event tap runs on a thread of its own instead of the main one, so nothing
   else the app does can sit in the path of keystrokes. A tap macOS switches off
   is re-enabled — at once when macOS says so, within two seconds when it does
-  not — and rebuilt if it keeps happening. A key release lost while that
-  happened no longer leaves a dictation recording until the five-minute cap.
+  not — and rebuilt if it keeps happening. A rebuild that fails is retried with
+  backoff and shows ⚠️ in the menu bar until it succeeds, instead of leaving the
+  hotkey silently dead. A key release lost while that happened no longer leaves
+  a dictation recording until the five-minute cap.
 - Pasting works on Dvorak and other layouts that move the V key. The synthetic
   ⌘V used to press whichever key sits where QWERTY's V is — ⌘K on Dvorak. It
   now presses the key that types "v" with ⌘ held on the current layout.

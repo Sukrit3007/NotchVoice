@@ -26,18 +26,25 @@ enum PasteKey {
     nonisolated static var cached: CGKeyCode { cache.load(ordering: .relaxed) }
     private nonisolated static let cache = Atomic<UInt16>(fallback)
 
-    private static var layoutObserver: (any NSObjectProtocol)?
+    private static var layoutObserver: LayoutObserver?
 
     /// Keeps `cached` in step with the layout. Called once, at launch.
+    ///
+    /// `.deliverImmediately`, which only the selector form takes: AppKit
+    /// suspends distributed notifications while an app is inactive, and this
+    /// one almost never is active. Suspended, a layout switch would reach the
+    /// cache only at the next paste, and ⌃⌘V would match the old V until then.
     static func observeLayoutChanges() {
         guard layoutObserver == nil else { return }
         _ = current()
-        layoutObserver = DistributedNotificationCenter.default().addObserver(
-            forName: NSNotification.Name(kTISNotifySelectedKeyboardInputSourceChanged as String),
-            object: nil, queue: .main
-        ) { _ in
-            MainActor.assumeIsolated { _ = current() }
-        }
+        let observer = LayoutObserver()
+        DistributedNotificationCenter.default().addObserver(
+            observer,
+            selector: #selector(LayoutObserver.layoutChanged(_:)),
+            name: NSNotification.Name(kTISNotifySelectedKeyboardInputSourceChanged as String),
+            object: nil,
+            suspensionBehavior: .deliverImmediately)
+        layoutObserver = observer
     }
 
     /// Looked up on every paste rather than trusted from the cache: it is 128
@@ -75,5 +82,13 @@ enum PasteKey {
             guard status == noErr, length > 0 else { return nil }
             return String(utf16CodeUnits: characters, count: length)
         }
+    }
+}
+
+/// Target for the layout-change notification, which the selector form needs.
+@MainActor
+private final class LayoutObserver: NSObject {
+    @objc func layoutChanged(_ notification: Notification) {
+        _ = PasteKey.current()
     }
 }

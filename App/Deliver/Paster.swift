@@ -175,9 +175,11 @@ enum Paster {
     /// a single-line field's whole contents as it takes focus — verified: an
     /// `NSTextField` with its caret at the end reads `{0, 26}` of 26 after an
     /// Accessibility focus — so ⌘V would replace what was there. The caret
-    /// captured at key-down is written back straight after; if the focus or
-    /// the caret write fails, the caller falls back to Copy-only Delivery
-    /// rather than risk pasting over a selection.
+    /// captured at key-down is written back straight after. If the field is
+    /// gone, nothing in the app changed and the paste goes where focus is. If
+    /// the focus or the caret write fails, the selection is collapsed and the
+    /// caller falls back to Copy-only Delivery — so neither the synthetic ⌘V
+    /// nor the user's own, prompted by the panel, lands on a selection.
     @MainActor
     private static func refocus(
         _ element: AXUIElement, selection: CFRange?, in pid: pid_t
@@ -203,17 +205,54 @@ enum Paster {
         if let window = AX.element(kAXWindowAttribute, of: element, within: budget) {
             AX.perform(kAXRaiseAction, on: window, within: budget)
         }
-        // A failed set is not proof nothing happened: one that timed out can
-        // still land, select-all included, after the ⌘V has gone in. Same
-        // fallback as a caret that will not go back.
-        guard AX.set(kAXFocusedAttribute, to: true, of: element, within: budget) else {
-            Log.deliver.notice("Focus moved within the app, and the field would not take it back")
+        switch AX.attempt(kAXFocusedAttribute, to: true, of: element, within: budget) {
+        case .success?:
+            break
+        case nil, .invalidUIElement?:
+            // Never sent, or the field no longer exists — closed, or re-created
+            // in place by a web view. Nothing in the app changed, so the paste
+            // goes where focus is now, as it did before refocusing existed.
+            Log.deliver.notice("Dictated field is gone — pasting where focus is")
+            return true
+        case let error?:
+            // Not proof nothing happened: a set that timed out on our side can
+            // still land, select-all included. The collapse is queued behind it.
+            Log.deliver.notice(
+                "Field would not take focus back (AXError \(error.rawValue, privacy: .public))")
+            collapseSelection(in: element, near: selection)
             return false
         }
+
         let restored = AX.set(kAXSelectedTextRangeAttribute, to: selection, of: element, within: budget)
         Log.deliver.info("Refocused the dictated field — caret restored: \(restored, privacy: .public)")
+        guard restored else {
+            collapseSelection(in: element, near: selection)
+            return false
+        }
         try? await Task.sleep(for: refocusSettleDelay)
-        return restored
+        return true
+    }
+
+    /// Leaves a caret, not a selection, in a field that took focus without
+    /// its caret coming back.
+    ///
+    /// Focusing selected the whole field, and the Copy-only panel is about to
+    /// tell the user to press ⌘V there. Tries the stored location first, then
+    /// the end of the field, which is always valid — the stored one may not
+    /// be, if the field was edited during a hands-free take. Its own budget:
+    /// the refocus one may be what ran out.
+    @MainActor
+    private static func collapseSelection(in element: AXUIElement, near selection: CFRange) {
+        let budget = AX.budget(total: refocusBudget, perCallCap: refocusCallCap)
+        var collapsed = AX.set(
+            kAXSelectedTextRangeAttribute, to: CFRange(location: selection.location, length: 0),
+            of: element, within: budget)
+        if !collapsed, let end = AX.int(kAXNumberOfCharactersAttribute, of: element, within: budget) {
+            collapsed = AX.set(
+                kAXSelectedTextRangeAttribute, to: CFRange(location: end, length: 0),
+                of: element, within: budget)
+        }
+        Log.deliver.notice("Caret not restored — selection collapsed: \(collapsed, privacy: .public)")
     }
 
     @MainActor

@@ -110,9 +110,10 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   another field or tab of the same app while it was transcribing. The focused
   element and its caret are remembered at key-down; before ⌘V the field is
   focused again and the caret put back, because focusing a single-line field
-  selects all of it and the paste would replace it. If the caret is unknown,
-  focus is left where it is; if the field will not take focus or the caret
-  will not go back, the text stays on the clipboard instead.
+  selects all of it and the paste would replace it. If the caret is unknown or
+  the field is gone, focus is left where it is and the paste goes there; if the
+  field will not take focus or the caret will not go back, the selection is
+  collapsed and the text stays on the clipboard instead.
 - Dictations no longer land in clipboard-manager history. The text staged for a
   paste is marked transient and concealed, the nspasteboard.org convention that
   clipboard managers honour. Copy-only results stay unmarked, since that text is

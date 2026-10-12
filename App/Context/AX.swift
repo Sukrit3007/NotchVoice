@@ -62,9 +62,17 @@ enum AX {
     static func set(
         _ attribute: String, to value: Bool, of element: AXUIElement, within budget: AXBudget
     ) -> Bool {
-        guard arm(element, within: budget) else { return false }
-        return AXUIElementSetAttributeValue(
-            element, attribute as CFString, value as CFBoolean) == .success
+        attempt(attribute, to: value, of: element, within: budget) == .success
+    }
+
+    /// `set`, saying how it went: nil when the budget was spent and nothing
+    /// was sent. A caller deciding whether the app may still act on the
+    /// request needs to tell "never sent" and "element gone" from a timeout.
+    static func attempt(
+        _ attribute: String, to value: Bool, of element: AXUIElement, within budget: AXBudget
+    ) -> AXError? {
+        guard arm(element, within: budget) else { return nil }
+        return AXUIElementSetAttributeValue(element, attribute as CFString, value as CFBoolean)
     }
 
     @discardableResult

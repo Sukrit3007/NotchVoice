@@ -95,8 +95,11 @@ enum Paster {
             return .copiedOnly
         }
 
-        if let element = focus.element {
-            await refocus(element.raw, in: focus.pid)
+        if let element = focus.element,
+           await !refocus(element.raw, selection: focus.selection, in: focus.pid) {
+            writePlainText(text)
+            Log.deliver.notice("Could not refocus the dictated field safely — copied only")
+            return .copiedOnly
         }
 
         // Read after refocusing, so it describes the field the paste is about
@@ -150,31 +153,59 @@ enum Paster {
         return .pasted
     }
 
-    /// Puts keyboard focus back on the field the dictation started in.
+    /// Puts keyboard focus back on the field the dictation started in, with
+    /// the caret where it was. Returns false only when pasting now would be
+    /// unsafe.
     ///
     /// Re-activating the app restores its key window, not the field: a click
     /// into another field or tab of the same app while transcription ran would
-    /// otherwise take the paste. Best effort — a field that is gone or will not
-    /// take focus leaves the paste going wherever focus is now, as it did
-    /// before this existed.
+    /// otherwise take the paste. When the app's focus cannot be read, or the
+    /// caret was never captured, focus is left alone and the paste goes where
+    /// it is now, as it did before this existed.
+    ///
+    /// **Focus is moved only when the caret can be put back.** AppKit selects
+    /// a single-line field's whole contents as it takes focus — verified: an
+    /// `NSTextField` with its caret at the end reads `{0, 26}` of 26 after an
+    /// Accessibility focus — so ⌘V would replace what was there. The caret
+    /// captured at key-down is written back straight after; if the focus or
+    /// the caret write fails, the caller falls back to Copy-only Delivery
+    /// rather than risk pasting over a selection.
     @MainActor
-    private static func refocus(_ element: AXUIElement, in pid: pid_t) async {
+    private static func refocus(
+        _ element: AXUIElement, selection: CFRange?, in pid: pid_t
+    ) async -> Bool {
         let budget = AX.budget(total: refocusBudget, perCallCap: refocusCallCap)
         let app = AXUIElementCreateApplication(pid)
 
-        if let current = AX.element(kAXFocusedUIElementAttribute, of: app, within: budget),
-           CFEqual(current, element) {
-            return
+        // Unknown is not "moved". Focusing a field that already has focus
+        // selects all of it too, and a set that times out on our side still
+        // runs in the app later — possibly after the ⌘V.
+        guard let current = AX.element(kAXFocusedUIElementAttribute, of: app, within: budget)
+        else {
+            Log.deliver.notice("Could not read the app's focus — leaving it alone")
+            return true
+        }
+        if CFEqual(current, element) { return true }
+
+        guard let selection else {
+            Log.deliver.notice("Focus moved within the app, but the caret is unknown — leaving it alone")
+            return true
         }
 
         if let window = AX.element(kAXWindowAttribute, of: element, within: budget) {
             AX.perform(kAXRaiseAction, on: window, within: budget)
         }
-        let refocused = AX.set(kAXFocusedAttribute, to: true, of: element, within: budget)
-        Log.deliver.info("Focus had moved within the app — refocused: \(refocused, privacy: .public)")
-        if refocused {
-            try? await Task.sleep(for: refocusSettleDelay)
+        // A failed set is not proof nothing happened: one that timed out can
+        // still land, select-all included, after the ⌘V has gone in. Same
+        // fallback as a caret that will not go back.
+        guard AX.set(kAXFocusedAttribute, to: true, of: element, within: budget) else {
+            Log.deliver.notice("Focus moved within the app, and the field would not take it back")
+            return false
         }
+        let restored = AX.set(kAXSelectedTextRangeAttribute, to: selection, of: element, within: budget)
+        Log.deliver.info("Refocused the dictated field — caret restored: \(restored, privacy: .public)")
+        try? await Task.sleep(for: refocusSettleDelay)
+        return restored
     }
 
     /// The element about to receive the paste, if it can be checked afterwards.

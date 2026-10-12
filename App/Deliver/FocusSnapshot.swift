@@ -19,6 +19,10 @@ struct FocusSnapshot: Sendable {
     /// not allowed to delay the key-down. Nil when that read has not finished
     /// or the app exposes no focused element.
     var element: AXElement?
+    /// The caret in `element` at key-down, so refocusing can put it back.
+    /// Without it, AppKit selects a single-line field's whole contents as the
+    /// field takes focus, and the paste would replace them.
+    var selection: CFRange?
 
     static func capture() -> FocusSnapshot? {
         guard let app = NSWorkspace.shared.frontmostApplication else { return nil }

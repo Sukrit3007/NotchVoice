@@ -44,12 +44,13 @@ enum AXContextReader {
         "AXSecureTextField",
     ]
 
-    /// The focused element, and its text when `includingText` allows it.
+    /// The focused element, its caret, and its text when `includingText`
+    /// allows it.
     ///
-    /// The element is wanted even when its text is not: delivery uses it to put
-    /// focus back on the field the dictation started in. Holding a reference to
-    /// it reads nothing — only the value is content, and that is what the
-    /// "Use what's on screen" switch governs.
+    /// The element and caret are wanted even when the text is not: delivery
+    /// uses them to put focus back on the field the dictation started in,
+    /// exactly where the cursor was. Neither reads content — the caret is two
+    /// numbers — and content is what the "Use what's on screen" switch governs.
     static func read(includingText: Bool) -> FocusedField? {
         let budget = AX.budget(total: budgetTotal, perCallCap: perCallCap)
         let system = AXUIElementCreateSystemWide()
@@ -57,8 +58,14 @@ enum AXContextReader {
         guard let focused = AX.element(kAXFocusedUIElementAttribute, of: system, within: budget)
         else { return nil }
 
-        let text = includingText ? text(of: focused, within: budget) : nil
-        return FocusedField(element: AXElement(raw: focused), text: text)
+        let role = AX.string(kAXRoleAttribute, of: focused, within: budget)
+        // Only for a role known not to be a password field: even where the
+        // caret sits in one says something about what was typed.
+        let selection = role.map { !refusedRoles.contains($0) } == true
+            ? AX.range(kAXSelectedTextRangeAttribute, of: focused, within: budget)
+            : nil
+        let text = includingText ? text(of: focused, role: role, within: budget) : nil
+        return FocusedField(element: AXElement(raw: focused), selection: selection, text: text)
     }
 
     /// The text around the cursor, or nil when there is none worth having.
@@ -66,11 +73,12 @@ enum AXContextReader {
     /// Returns nil rather than an empty string for every refusal — a secure
     /// field, an unreadable app, a field with nothing in it, a spent budget —
     /// so the caller has one case to handle instead of five.
-    private static func text(of focused: AXUIElement, within budget: AXBudget) -> String? {
+    private static func text(
+        of focused: AXUIElement, role: String?, within budget: AXBudget
+    ) -> String? {
         // Checked before the value is requested, not after. Asking a password
         // field for its contents and then discarding them is still asking.
-        if let role = AX.string(kAXRoleAttribute, of: focused, within: budget),
-           refusedRoles.contains(role) {
+        if let role, refusedRoles.contains(role) {
             return nil
         }
 
@@ -85,6 +93,8 @@ enum AXContextReader {
 /// What had keyboard focus when the dictation key went down.
 struct FocusedField: Sendable {
     let element: AXElement
+    /// The caret, or the selected range. Nil when it could not be read.
+    let selection: CFRange?
     /// Never stored, never sent anywhere.
     let text: String?
 }

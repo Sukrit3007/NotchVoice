@@ -67,6 +67,16 @@ enum AX {
             element, attribute as CFString, value as CFBoolean) == .success
     }
 
+    @discardableResult
+    static func set(
+        _ attribute: String, to range: CFRange, of element: AXUIElement, within budget: AXBudget
+    ) -> Bool {
+        guard arm(element, within: budget) else { return false }
+        var range = range
+        guard let value = AXValueCreate(.cfRange, &range) else { return false }
+        return AXUIElementSetAttributeValue(element, attribute as CFString, value) == .success
+    }
+
     private static func copy(
         _ attribute: String, of element: AXUIElement, within budget: AXBudget
     ) -> CFTypeRef? {

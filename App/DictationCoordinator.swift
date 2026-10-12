@@ -442,6 +442,7 @@ final class DictationCoordinator {
             }.value
             guard session == self.session else { return }
             focus?.element = field?.element
+            focus?.selection = field?.selection
             screenContext = field?.text
         }
     }

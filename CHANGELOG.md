@@ -75,6 +75,11 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   goes down; reading the field for context now happens after it, off the main
   thread, and every Accessibility call in that read shares one quarter-second
   budget instead of each getting its own.
+- The event tap runs on a thread of its own instead of the main one, so nothing
+  else the app does can sit in the path of keystrokes. A tap macOS switches off
+  is re-enabled — at once when macOS says so, within two seconds when it does
+  not — and rebuilt if it keeps happening. A key release lost while that
+  happened no longer leaves a dictation recording until the five-minute cap.
 
 ## [0.1.0] - 2026-09-08
 

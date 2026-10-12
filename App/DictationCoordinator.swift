@@ -204,16 +204,18 @@ final class DictationCoordinator {
             "Binding: \(binding.displayName, privacy: .public) (keycode \(binding.rawValue, privacy: .public))")
 
         let tap = ModifierTap(binding: binding)
-        tap.onKeyDown = { [weak self] in
+        // Timestamps come from the tap, which saw the key move a hop before
+        // this runs.
+        tap.onKeyDown = { [weak self] at in
             guard let self else { return }
             onBindingKeyDown?()
             if isProcessing {
                 showBusy()
                 return
             }
-            dispatch(.keyDown(at: Self.now()))
+            dispatch(.keyDown(at: at))
         }
-        tap.onKeyUp = { [weak self] in self?.dispatch(.keyUp(at: Self.now())) }
+        tap.onKeyUp = { [weak self] at in self?.dispatch(.keyUp(at: at)) }
         tap.onChord = { [weak self] in self?.dispatchIfActive(.chordPressed) }
         // Both of these fire far beyond our own gesture. Dropping them when idle
         // keeps the log readable; the machine ignores them there anyway.

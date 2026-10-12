@@ -57,6 +57,17 @@ public enum BiasPrompt {
         return prompt.isEmpty ? nil : prompt
     }
 
+    /// The prompt as the decoder should be handed it: with one leading space,
+    /// as Whisper's reference implementation and WhisperKit's own CLI pass it.
+    ///
+    /// A prompt is read as earlier transcript, where every word carries its
+    /// leading space. Without one, the first term tokenises as the start of a
+    /// text (`f|etch…`) instead of the word heard mid-sentence (` fetch…`),
+    /// and the bias lands with the wrong capital.
+    public static func decoderText(_ prompt: String) -> String {
+        " " + prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     /// Cuts at a word boundary rather than mid-word, so the prompt never ends on
     /// a fragment the decoder would try to complete.
     static func truncated(_ text: String, to limit: Int) -> String {

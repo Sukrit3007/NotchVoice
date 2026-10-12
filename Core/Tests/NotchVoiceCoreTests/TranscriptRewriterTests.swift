@@ -259,4 +259,14 @@ struct BiasPromptTests {
         #expect(!tail.contains("\n"))
         #expect(tail == "one two three")
     }
+
+    @Test("the decoder reads the prompt with one leading space, as Whisper does")
+    func decoderTextLeadsWithASpace() {
+        // Without it the first term tokenises as the start of a text
+        // ("f|etch…") rather than as a word mid-sentence (" fetch…"), and the
+        // decoder hears "fetchUserProfile" as "FetchUserProfile". Measured
+        // with large-v3 turbo on Tools/Bench/Fixtures/code-term.wav.
+        #expect(BiasPrompt.decoderText("fetchUserProfile") == " fetchUserProfile")
+        #expect(BiasPrompt.decoderText("  Kubernetes, WhisperKit \n") == " Kubernetes, WhisperKit")
+    }
 }

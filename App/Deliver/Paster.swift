@@ -131,8 +131,12 @@ enum Paster {
     /// `flags` is assigned outright rather than OR-ed into what the source
     /// seeded, so a modifier the user happens to be holding cannot turn the
     /// synthetic ⌘V into ⌥⌘V.
+    ///
+    /// The key is whichever one types "v" on the current layout — see
+    /// `PasteKey`.
+    @MainActor
     private static func sendCommandV() -> Bool {
-        let vKeyCode: CGKeyCode = 9  // kVK_ANSI_V
+        let vKeyCode = PasteKey.current()
         guard let source = CGEventSource(stateID: .combinedSessionState),
               let down = CGEvent(keyboardEventSource: source,
                                  virtualKey: vKeyCode, keyDown: true),

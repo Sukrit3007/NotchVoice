@@ -83,6 +83,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   is re-enabled — at once when macOS says so, within two seconds when it does
   not — and rebuilt if it keeps happening. A key release lost while that
   happened no longer leaves a dictation recording until the five-minute cap.
+- Pasting works on Dvorak and other layouts that move the V key. The synthetic
+  ⌘V used to press whichever key sits where QWERTY's V is — ⌘K on Dvorak. It
+  now presses the key that types "v" with ⌘ held on the current layout.
 
 ## [0.1.0] - 2026-09-08
 

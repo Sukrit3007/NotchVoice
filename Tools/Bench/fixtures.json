@@ -1,0 +1,59 @@
+{
+  "voice": "Samantha",
+  "rate": 175,
+  "fixtures": [
+    {
+      "id": "chat-short",
+      "say": "Sounds good, see you at lunch.",
+      "expected": "Sounds good, see you at lunch."
+    },
+    {
+      "id": "chat-question",
+      "say": "Can you send me the deck before the call?",
+      "expected": "Can you send me the deck before the call?"
+    },
+    {
+      "id": "self-correction",
+      "say": "Let's meet at 5, actually 6, in the main conference room.",
+      "verbatim": "Let's meet at 5, actually 6, in the main conference room.",
+      "expected": "Let's meet at 6 in the main conference room."
+    },
+    {
+      "id": "code-term",
+      "say": "Rename the function to fetch user profile and add a unit test for it.",
+      "expected": "Rename the function to fetchUserProfile and add a unit test for it.",
+      "terms": ["fetchUserProfile"]
+    },
+    {
+      "id": "email",
+      "say": "Please send the signed contract to priya dot sharma at example dot com by Friday.",
+      "expected": "Please send the signed contract to priya.sharma@example.com by Friday."
+    },
+    {
+      "id": "names",
+      "say": "Ask Priya to share the Propsoch dashboard with Arjun, then push the NotchVoice build to TestFlight.",
+      "expected": "Ask Priya to share the Propsoch dashboard with Arjun, then push the NotchVoice build to TestFlight.",
+      "terms": ["Priya", "Propsoch", "Arjun", "NotchVoice", "TestFlight"]
+    },
+    {
+      "id": "list",
+      "say": "Here is my list for tomorrow: buy milk, call the bank, renew my passport, and book the flight to Bangalore.",
+      "expected": "Here is my list for tomorrow: buy milk, call the bank, renew my passport, and book the flight to Bangalore."
+    },
+    {
+      "id": "numbers",
+      "say": "The invoice for 3 seats comes to $1,250 after a 15% discount, and it is due by 3:30 p.m. on March 14.",
+      "expected": "The invoice for 3 seats comes to $1,250 after a 15% discount, and it is due by 3:30 p.m. on March 14."
+    },
+    {
+      "id": "update-medium",
+      "say": "Hi team, quick update on the release. The build passed every test this morning, and I have sent it to the beta group. If nothing serious comes up by Wednesday, we will ship it to everyone on Thursday.",
+      "expected": "Hi team, quick update on the release. The build passed every test this morning, and I have sent it to the beta group. If nothing serious comes up by Wednesday, we will ship it to everyone on Thursday."
+    },
+    {
+      "id": "paragraph-long",
+      "say": "The new onboarding flow is nearly ready, but I want to tidy a few things before we ship it. The permissions screen still asks for accessibility before it explains why, which feels backwards. The model download takes too long on a slow connection, so we should show its size up front. And I would like one more pass on the copy, because several sentences are longer than they need to be. Once that is done, I will record a short video for the release notes and send it round for feedback.",
+      "expected": "The new onboarding flow is nearly ready, but I want to tidy a few things before we ship it. The permissions screen still asks for accessibility before it explains why, which feels backwards. The model download takes too long on a slow connection, so we should show its size up front. And I would like one more pass on the copy, because several sentences are longer than they need to be. Once that is done, I will record a short video for the release notes and send it round for feedback."
+    }
+  ]
+}

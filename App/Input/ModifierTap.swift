@@ -53,7 +53,7 @@ private extension ModifierKey {
 /// that waits. Anything worth acting on is handed to the main actor after the
 /// decision is made.
 ///
-/// **Exactly three things are taken:**
+/// **Exactly four things are taken:**
 ///
 /// 1. The binding key's own `flagsChanged`, only when the binding is `fn`. A
 ///    right-hand modifier passes through — swallowing ⌥ would break every
@@ -61,6 +61,8 @@ private extension ModifierKey {
 /// 2. `Space` while the binding is held — the hands-free chord. Without taking
 ///    it, locking a session also types a space.
 /// 3. `Escape`, only while a dictation is in flight.
+/// 4. `⌃⌘V` — Paste Last Transcript — only once there is a transcript to
+///    paste. Before that the shortcut belongs to whichever app is in front.
 ///
 /// Everything else returns untouched. `fn` in combination — `fn`+`Delete`,
 /// `fn`+arrows — still reaches apps: those carry the fn flag in their own
@@ -105,6 +107,13 @@ final class ModifierTap {
         set { state.isDictating = newValue }
     }
 
+    /// Whether there is a transcript to paste again, maintained by the
+    /// coordinator. ⌃⌘V is only taken while this is true.
+    var canPasteLast: Bool {
+        get { state.canPasteLast }
+        set { state.canPasteLast = newValue }
+    }
+
     /// Key-down and key-up carry the moment the tap saw them. The events reach
     /// the main actor a hop later, and a busy main thread must not stretch or
     /// shrink a hold that the state machine measures.
@@ -114,6 +123,7 @@ final class ModifierTap {
     var onChord: (() -> Void)?
     var onOtherKey: (() -> Void)?
     var onEscape: (() -> Void)?
+    var onPasteLast: (() -> Void)?
 
     init(binding: ModifierKey = BindingStore.binding) {
         self.binding = binding
@@ -254,6 +264,8 @@ final class ModifierTap {
             onOtherKey?()
         case .escape:
             onEscape?()
+        case .pasteLast:
+            onPasteLast?()
         case .disabled:
             // Already re-armed on the tap thread; this is only the count.
             Log.input.error("Tap was disabled by macOS — re-armed")
@@ -347,6 +359,7 @@ private enum TapEvent: Sendable {
     case chord
     case otherKey
     case escape
+    case pasteLast
     case disabled
 }
 
@@ -377,6 +390,13 @@ private final class TapState: Sendable {
     private static let escapeKeyCode: Int64 = 53
     private static let spaceKeyCode: Int64 = 49
 
+    /// The modifiers that decide whether V is the paste-last chord: ⌃ and ⌘
+    /// down, ⌥ and ⇧ up — so ⌥⌃⌘V and friends still reach apps.
+    private static let pasteLastMask = CGEventFlags([
+        .maskControl, .maskCommand, .maskAlternate, .maskShift,
+    ]).rawValue
+    private static let pasteLastFlags = CGEventFlags([.maskControl, .maskCommand]).rawValue
+
     private struct Fields {
         var port: PortRef?
         var isBindingKeyDown = false
@@ -390,7 +410,10 @@ private final class TapState: Sendable {
         /// then the condition that justified swallowing the key-down is
         /// already false.
         var swallowedEscape = false
+        /// Same pairing for the paste-last chord's V.
+        var swallowedPasteLast = false
         var isDictating = false
+        var canPasteLast = false
     }
 
     let binding: ModifierKey
@@ -405,6 +428,11 @@ private final class TapState: Sendable {
     var isDictating: Bool {
         get { fields.withLock { $0.isDictating } }
         set { fields.withLock { $0.isDictating = newValue } }
+    }
+
+    var canPasteLast: Bool {
+        get { fields.withLock { $0.canPasteLast } }
+        set { fields.withLock { $0.canPasteLast = newValue } }
     }
 
     func setPort(_ port: CFMachPort?) {
@@ -430,7 +458,7 @@ private final class TapState: Sendable {
 
     /// Returns whether to destroy the event.
     ///
-    /// Every path returns `false` unless the event is one of the three this app
+    /// Every path returns `false` unless the event is one of the four this app
     /// owns. Read the `return true`s as the complete list of what this app takes
     /// from the rest of the system.
     func handle(type: CGEventType, event: CGEvent) -> Bool {
@@ -454,6 +482,10 @@ private final class TapState: Sendable {
         let flags = event.flags.rawValue
         let bindingCode = Int64(binding.rawValue)
         let binding = binding
+        let pasteKeyCode = Int64(PasteKey.cached)
+        // Held down, a chord auto-repeats. One paste per press.
+        let isRepeat = type == .keyDown
+            && event.getIntegerValueField(.keyboardEventAutorepeat) != 0
         var report: TapEvent?
 
         let swallow = fields.withLock { fields -> Bool in
@@ -496,6 +528,12 @@ private final class TapState: Sendable {
                     report = .chord
                     return true
                 }
+                if fields.canPasteLast, keyCode == pasteKeyCode,
+                   flags & Self.pasteLastMask == Self.pasteLastFlags {
+                    fields.swallowedPasteLast = true
+                    if !isRepeat { report = .pasteLast }
+                    return true
+                }
                 if fields.isBindingKeyDown { report = .otherKey }
                 return false
 
@@ -508,6 +546,11 @@ private final class TapState: Sendable {
                 }
                 if keyCode == Self.escapeKeyCode, fields.swallowedEscape {
                     fields.swallowedEscape = false
+                    return true
+                }
+                // By key alone: ⌃ and ⌘ are often let go before V.
+                if keyCode == pasteKeyCode, fields.swallowedPasteLast {
+                    fields.swallowedPasteLast = false
                     return true
                 }
                 return false

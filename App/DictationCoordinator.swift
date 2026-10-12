@@ -143,6 +143,17 @@ final class DictationCoordinator {
     /// completes after cancellation or a future gesture change.
     @ObservationIgnored private var session = 0
 
+    /// The most recent delivered transcript, for Paste Last Transcript.
+    ///
+    /// Memory only: history is where transcripts are kept, and this is gone at
+    /// quit. The tap takes ⌃⌘V only while there is something here to paste.
+    @ObservationIgnored private var lastTranscript: String? {
+        didSet { tap?.canPasteLast = lastTranscript != nil }
+    }
+
+    /// Read by the menu each time it opens, so it needs no observation.
+    var canPasteLast: Bool { lastTranscript != nil }
+
     init(stack: DataStack = .shared) {
         let buffer = LevelBuffer(capacity: Self.waveformBarCount)
         self.buffer = buffer
@@ -170,6 +181,7 @@ final class DictationCoordinator {
         }
 
         Cues.prewarm()
+        PasteKey.observeLayoutChanges()
 
         guard armTap() else {
             // Not a crash and not a hang: nothing can trigger a dictation, so
@@ -221,6 +233,8 @@ final class DictationCoordinator {
         // keeps the log readable; the machine ignores them there anyway.
         tap.onOtherKey = { [weak self] in self?.dispatchIfActive(.otherKeyPressed) }
         tap.onEscape = { [weak self] in self?.dispatchIfActive(.escapePressed) }
+        tap.onPasteLast = { [weak self] in self?.pasteLast() }
+        tap.canPasteLast = lastTranscript != nil
 
         guard tap.start() else {
             Log.input.error("Tap did NOT arm — Accessibility or Input Monitoring is missing")
@@ -511,6 +525,7 @@ final class DictationCoordinator {
                 let outcome = await Paster.deliver(text, to: target)
                 Log.deliver.info(
                     "Delivery: \(String(describing: outcome), privacy: .public) (target \(target?.bundleID ?? "none", privacy: .public))")
+                lastTranscript = text
 
                 // After delivery, so a row means the words reached the user.
                 // `rawText` only when polish changed something — nil otherwise
@@ -543,6 +558,39 @@ final class DictationCoordinator {
                 Log.dictation.error(
                     "Transcription failed: \(String(describing: error), privacy: .public)")
                 finish(session, with: .error(.transcriptionFailed), dwell: Self.errorDwell)
+            }
+        }
+    }
+
+    /// Pastes the most recent transcript again, into whatever has focus now.
+    ///
+    /// For recovering from a paste that went somewhere unexpected, or only
+    /// reached the clipboard. Ignored while a dictation is recording or
+    /// processing: that one owns the clipboard and the keyboard until it is
+    /// delivered.
+    func pasteLast() {
+        guard let text = lastTranscript, machine.state == .idle, !isProcessing else { return }
+        let session = self.session
+        let target = FocusSnapshot.capture()
+
+        Task {
+            let outcome = await Paster.deliver(text, to: target)
+            Log.deliver.info(
+                "Paste last: \(String(describing: outcome), privacy: .public) (target \(target?.bundleID ?? "none", privacy: .public))")
+
+            // A paste that landed is its own feedback; a miss needs saying. A
+            // dictation started meanwhile owns the island.
+            guard session == self.session, machine.state == .idle else { return }
+            switch outcome {
+            case .copiedOnly:
+                setPhase(.copied)
+                scheduleCollapse(after: Self.errorDwell)
+            case .pasted where phase == .copied:
+                // The panel still says "press ⌘V", which is now wrong.
+                setPhase(.done)
+                scheduleCollapse(after: Self.doneDwell)
+            case .pasted:
+                break
             }
         }
     }

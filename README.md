@@ -33,6 +33,7 @@ are implemented. A final MacBook hardware pass is still required before a public
 | Dictate | hold `fn` |
 | Hands-free | `fn`+`Space`, then `fn` again to finish |
 | Cancel | `Escape` |
+| Paste last transcript again | `⌃⌘V`, or the menu bar |
 
 Core and SoundGen tests run locally. The full app-hosted build and tests require the stable
 Xcode Metal Toolchain and must pass before publishing.

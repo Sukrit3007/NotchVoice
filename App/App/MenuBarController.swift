@@ -108,6 +108,7 @@ final class MenuBarController {
         menu.delegate = MenuRefresher.shared
         MenuActions.shared.library = library
         MenuActions.shared.updates = updates
+        MenuActions.shared.coordinator = coordinator
         MenuRefresher.shared.rebuild = { [weak self] in self?.rebuildItems(in: $0) }
         rebuildItems(in: menu)
         return menu
@@ -131,6 +132,18 @@ final class MenuBarController {
         }
 
         menu.addItem(.separator())
+
+        // The shortcut is shown so it can be found here, and works anywhere:
+        // the event tap takes ⌃⌘V before this menu could ever see it.
+        let pasteLast = NSMenuItem(
+            title: "Paste Last Transcript",
+            action: #selector(MenuActions.pasteLast),
+            keyEquivalent: "v"
+        )
+        pasteLast.keyEquivalentModifierMask = [.control, .command]
+        pasteLast.target = MenuActions.shared
+        pasteLast.isEnabled = coordinator.canPasteLast
+        menu.addItem(pasteLast)
 
         // The only preference that stays in the menu.
         //
@@ -237,6 +250,15 @@ private final class MenuActions: NSObject {
 
     /// Also weak, and for the same reason — the app delegate owns it.
     weak var updates: UpdateController?
+
+    /// Weak for the same reason again.
+    weak var coordinator: DictationCoordinator?
+
+    /// The status menu does not activate this app, so whatever was frontmost
+    /// before the menu opened is still frontmost — which is where this pastes.
+    @objc func pasteLast() {
+        coordinator?.pasteLast()
+    }
 
     @objc func checkForUpdates() {
         updates?.checkForUpdates()

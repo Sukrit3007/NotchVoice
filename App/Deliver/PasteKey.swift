@@ -1,6 +1,7 @@
+import AppKit
 import Carbon.HIToolbox
-import CoreGraphics
 import NotchVoiceCore
+import Synchronization
 
 /// The physical key that types "v" on the keyboard layout in use, for the
 /// synthetic ⌘V.
@@ -18,14 +19,38 @@ enum PasteKey {
     /// Where V sits on QWERTY, and the answer when no key on the current
     /// layout types "v" — the non-Latin layouts without a ⌘ table, where the
     /// QWERTY position is what ⌘-shortcuts use.
-    static let fallback: CGKeyCode = 9
+    nonisolated static let fallback: CGKeyCode = 9
 
-    /// Looked up on every paste rather than cached: it is 128 table lookups,
-    /// and the user can switch layout between two dictations.
+    /// The last answer, readable from any thread. The event tap matches the
+    /// paste-last chord against it and cannot call into Text Input Sources.
+    nonisolated static var cached: CGKeyCode { cache.load(ordering: .relaxed) }
+    private nonisolated static let cache = Atomic<UInt16>(fallback)
+
+    private static var layoutObserver: (any NSObjectProtocol)?
+
+    /// Keeps `cached` in step with the layout. Called once, at launch.
+    static func observeLayoutChanges() {
+        guard layoutObserver == nil else { return }
+        _ = current()
+        layoutObserver = DistributedNotificationCenter.default().addObserver(
+            forName: NSNotification.Name(kTISNotifySelectedKeyboardInputSourceChanged as String),
+            object: nil, queue: .main
+        ) { _ in
+            MainActor.assumeIsolated { _ = current() }
+        }
+    }
+
+    /// Looked up on every paste rather than trusted from the cache: it is 128
+    /// table lookups, and the user can switch layout between two dictations.
     static func current() -> CGKeyCode {
-        guard let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
-              let code = keyCode(in: source)
-        else { return fallback }
+        let code: CGKeyCode
+        if let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
+           let found = keyCode(in: source) {
+            code = found
+        } else {
+            code = fallback
+        }
+        cache.store(code, ordering: .relaxed)
         return code
     }
 

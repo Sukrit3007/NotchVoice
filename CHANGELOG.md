@@ -9,6 +9,12 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Paste Last Transcript: `⌃⌘V`, or the menu bar item, pastes the most recent
+  dictation again into whatever has focus — for a paste that went somewhere
+  unexpected or only reached the clipboard. Kept in memory only, and the tap
+  takes `⌃⌘V` only once there is a transcript to paste. Fixed rather than
+  rebindable: the existing hotkey setting picks one modifier key and has no
+  shortcut recorder to reuse.
 - An optional local cleanup model, offered in Settings → Cleanup. A 2.3GB
   download that runs entirely on this Mac and formats better than Apple
   Intelligence does — paragraphs where you change subject, lists where you list
@@ -43,8 +49,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - The event tap consumes the events it owns, where it previously only observed.
   This is what reserves `fn` — without it, holding the Globe key would also open
-  the emoji picker on most Macs. It takes exactly three things: `fn` itself,
-  `Space` while `fn` is held, and `Escape` during a dictation.
+  the emoji picker on most Macs. It takes exactly four things: `fn` itself,
+  `Space` while `fn` is held, `Escape` during a dictation, and `⌃⌘V` once there
+  is a transcript to paste again.
 - **Accessibility is now required.** A consuming tap needs it, so without it the
   hotkey does nothing at all — where before it degraded to copy-only.
 - The island appears the instant the key goes down. The old 150ms delay existed

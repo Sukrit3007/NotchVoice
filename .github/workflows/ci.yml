@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Core + SoundGen tests
+    # Core targets macOS 26 and the code is built with Xcode 27 (Swift 6.4).
+    # `xcode-27` is the only hosted image with Xcode 27 (macOS 27, preview
+    # label). `macos-26` is GA but has Xcode 26.6 only, an older Swift that
+    # has not been tried here.
+    #
+    # Not run in CI: the app build and AppTests (they need the 839 MB Metal
+    # Toolchain for MLX, the MLX/WhisperKit packages, the signing identity,
+    # and Apple Intelligence), and Tools/Bench (it needs an installed speech
+    # model and the Neural Engine).
+    runs-on: xcode-27
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: latest-stable
+
+      - name: Toolchain
+        run: xcodebuild -version && swift --version
+
+      - name: Core tests
+        run: swift test --package-path Core
+
+      - name: SoundGen tests
+        run: swift test --package-path Tools/SoundGen

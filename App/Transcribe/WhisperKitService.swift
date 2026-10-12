@@ -107,6 +107,17 @@ actor WhisperKitService {
         )
 
         onPhase(.loading)
+        try await load(from: folder)
+        onPhase(.ready)
+    }
+
+    /// Loads and prewarms a model already on disk. Never touches the network.
+    ///
+    /// The second half of `prepare`, split out so the bench
+    /// (`AppTests/DictationBench.swift`) times exactly the load the app does,
+    /// without the Hugging Face check that comes before it.
+    func load(from folder: URL) async throws {
+        guard pipe == nil else { return }
         let config = WhisperKitConfig(
             model: modelVariant,
             downloadBase: AppPaths.models,
@@ -120,7 +131,6 @@ actor WhisperKitService {
             download: false
         )
         pipe = try await WhisperKit(config)
-        onPhase(.ready)
     }
 
     /// Transcribes, optionally biased toward a prompt.

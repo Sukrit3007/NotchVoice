@@ -119,7 +119,8 @@ final class DictationCoordinator {
     @ObservationIgnored private var buffer: LevelBuffer
     @ObservationIgnored private var focus: FocusSnapshot?
     /// Text that was in the target field when the key went down. Never stored,
-    /// never sent anywhere — see `AXContextReader`.
+    /// never sent anywhere — see `AXContextReader`. Filled in shortly after
+    /// key-down, by a read that runs off the main thread.
     @ObservationIgnored private var screenContext: String?
     @ObservationIgnored private var maxDurationTimer: Task<Void, Never>?
     @ObservationIgnored private var collapseTask: Task<Void, Never>?
@@ -378,15 +379,14 @@ final class DictationCoordinator {
         session &+= 1
         // Captured before any window is shown — see FocusSnapshot's note.
         focus = FocusSnapshot.capture()
-        // Same reason, and the stronger one: once the island is up, *it* is not
-        // the focused element but the frontmost app may have shifted, and by the
-        // time transcription finishes the user has often clicked elsewhere. The
-        // field being dictated into is only knowable now.
-        screenContext = ContextPreference.isEnabled ? AXContextReader.focusedText() : nil
+        screenContext = nil
         resetWaveform()
 
         armMaxDurationTimer()
 
+        // The microphone comes first. Anything ahead of it on this path — the
+        // screen read below used to be — is speech clipped off the front of the
+        // take, because people start talking the moment the key goes down.
         do {
             try recorder.start()
         } catch {
@@ -400,6 +400,29 @@ final class DictationCoordinator {
         // so it cannot compose a character the island would flash on.
         setPhase(.recording)
         Cues.play(.start)
+
+        readScreenContext(for: session)
+    }
+
+    /// Reads the field being dictated into, off the main thread.
+    ///
+    /// Still at key-down, because by the time transcription finishes the user
+    /// has often clicked elsewhere — the field being dictated into is only
+    /// knowable now. After the island is shown is fine: it never becomes key,
+    /// so it cannot take focus from that field.
+    ///
+    /// Bounded by `AXContextReader`'s budget, which is shorter than the hold
+    /// threshold, so the text is normally in hand by key-up. If a wedged app
+    /// makes it later than that, the take is transcribed unbiased.
+    private func readScreenContext(for session: Int) {
+        guard ContextPreference.isEnabled else { return }
+        Task {
+            let text = await Task.detached(priority: .userInitiated) {
+                AXContextReader.focusedText()
+            }.value
+            guard session == self.session else { return }
+            screenContext = text
+        }
     }
 
     private func finishAndTranscribe() {

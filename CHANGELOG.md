@@ -68,6 +68,14 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Design spec for the notch-based dictation app.
 - Repository scaffolding: gitignore, readme, versioning convention.
 
+### Fixed
+
+- The first words of a dictation are no longer clipped when the app being
+  dictated into is slow to answer. The microphone starts the instant the key
+  goes down; reading the field for context now happens after it, off the main
+  thread, and every Accessibility call in that read shares one quarter-second
+  budget instead of each getting its own.
+
 ## [0.1.0] - 2026-09-08
 
 ### Added

@@ -16,16 +16,21 @@ import AppKit
 ///    never stored — `Capture` has no field for it.
 /// 3. **Block the dictation.** Accessibility calls are synchronous IPC into
 ///    another process, and a busy or wedged app would otherwise hold up the
-///    keypress. The messaging timeout below bounds that.
-@MainActor
+///    keypress. The read runs off the main thread, after the microphone has
+///    started, and every call in it shares one `AXBudget`.
 enum AXContextReader {
 
-    /// How long to wait on the focused app before giving up.
+    /// How long the whole read may take, every call included.
     ///
     /// Context is an enhancement; a dictation must never be slower because the
     /// app being dictated into is busy. Missing it costs a little accuracy,
-    /// waiting on it costs the whole interaction.
-    private static let timeout: Float = 0.25
+    /// waiting on it costs the whole interaction. Well inside the 0.4s hold
+    /// threshold, so the text is in hand before the key comes back up.
+    private static let budgetTotal: TimeInterval = 0.25
+
+    /// No single call may take more than this, so a slow focus lookup still
+    /// leaves time to read the field's value.
+    private static let perCallCap: TimeInterval = 0.15
 
     /// Roles that are never read, whatever they contain.
     ///
@@ -39,50 +44,26 @@ enum AXContextReader {
     /// The text around the cursor, or nil when there is none worth having.
     ///
     /// Returns nil rather than an empty string for every refusal — no focused
-    /// element, a secure field, an unreadable app, a field with nothing in it —
-    /// so the caller has one case to handle instead of five.
+    /// element, a secure field, an unreadable app, a field with nothing in it,
+    /// a spent budget — so the caller has one case to handle instead of six.
     static func focusedText() -> String? {
+        let budget = AX.budget(total: budgetTotal, perCallCap: perCallCap)
         let system = AXUIElementCreateSystemWide()
-        AXUIElementSetMessagingTimeout(system, timeout)
 
-        guard let focused = copyElement(from: system, attribute: kAXFocusedUIElementAttribute)
+        guard let focused = AX.element(kAXFocusedUIElementAttribute, of: system, within: budget)
         else { return nil }
-        AXUIElementSetMessagingTimeout(focused, timeout)
 
         // Checked before the value is requested, not after. Asking a password
         // field for its contents and then discarding them is still asking.
-        if let role = copyString(from: focused, attribute: kAXRoleAttribute),
+        if let role = AX.string(kAXRoleAttribute, of: focused, within: budget),
            refusedRoles.contains(role) {
             return nil
         }
 
-        guard let value = copyString(from: focused, attribute: kAXValueAttribute),
+        guard let value = AX.string(kAXValueAttribute, of: focused, within: budget),
               !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else { return nil }
 
         return value
-    }
-
-    // MARK: - AX plumbing
-
-    private static func copyElement(
-        from element: AXUIElement, attribute: String
-    ) -> AXUIElement? {
-        var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success,
-              let value
-        else { return nil }
-        // `CFGetTypeID` rather than a conditional cast: the attribute is typed
-        // `CFTypeRef` and an `as?` to `AXUIElement` succeeds for values that are
-        // not one.
-        guard CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
-        return (value as! AXUIElement)
-    }
-
-    private static func copyString(from element: AXUIElement, attribute: String) -> String? {
-        var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success
-        else { return nil }
-        return value as? String
     }
 }

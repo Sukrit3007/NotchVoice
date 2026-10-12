@@ -146,6 +146,8 @@ actor WhisperKitService {
         language: String? = nil
     ) async throws -> String {
         guard let pipe else { throw TranscriptionError.notReady }
+        // Not decoded: Whisper answers silence with words. See `SilentTake`.
+        guard !SilentTake.isSilent(samples) else { throw TranscriptionError.empty }
 
         await acquire()
         defer { release() }

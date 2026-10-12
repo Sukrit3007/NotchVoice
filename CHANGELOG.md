@@ -118,6 +118,11 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   transcript before its first word; it is now WhisperKit 1.1, which fixes that.
   Custom words are also handed over the way Whisper expects, so
   `fetchUserProfile` lands as written rather than as "FetchUserProfile".
+- A take the microphone heard nothing in now says so, instead of pasting the
+  "you" or "Thank you." the speech model invents for silence — words it was
+  more likely to invent with custom words or screen text to lean on. Below
+  the level the app already logs as effectively silent, a take is not
+  transcribed at all.
 - The first words of a dictation are no longer clipped when the app being
   dictated into is slow to answer. The microphone starts the instant the key
   goes down; reading the field for context now happens after it, off the main

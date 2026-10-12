@@ -489,11 +489,11 @@ final class DictationCoordinator {
         // identical from outside: the user did not speak, or the microphone
         // captured silence while they did. A peak near zero means no signal ever
         // arrived, so the problem is the input device rather than the model.
-        let peak = samples.reduce(0 as Float) { max($0, abs($1)) }
+        let peak = SilentTake.peak(samples)
         let rms = LevelBuffer.rms(samples)
         Log.audio.info(
             "Captured \(duration, privacy: .public)s, \(samples.count, privacy: .public) samples, peak \(peak, privacy: .public) rms \(rms, privacy: .public)")
-        if peak < 0.01 {
+        if peak < SilentTake.peakThreshold {
             Log.audio.notice("Audio is effectively SILENT — check the input device and its volume")
         }
 

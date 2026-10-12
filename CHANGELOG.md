@@ -115,9 +115,12 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   meant to stay on the clipboard.
 - "Done" no longer appears for a paste that was read but never arrived — a
   field that cannot take text, or a clipboard manager answering in the target's
-  place. Where the field exposes its length and selection, both are compared
-  before and after for up to half a second; if neither moved, the text stays on
-  the clipboard and the notch says so. The field's text is never read for this.
+  place. The field the paste was aimed at is measured — its length and
+  selection, before and after, for up to half a second, and only while it holds
+  the app's focus. If neither moved, the text stays on the clipboard and the
+  notch says so. Anything uncertain — an empty field, a field that lost focus,
+  one that cannot be read — counts as pasted, since a false "copied" invites a
+  second paste. The field's text is never read for this.
 
 ## [0.1.0] - 2026-09-08
 

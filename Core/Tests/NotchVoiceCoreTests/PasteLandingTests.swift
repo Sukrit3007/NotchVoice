@@ -28,6 +28,13 @@ struct PasteLandingTests {
         #expect(PasteLanding.verdict(before: state, after: state) == .notLanded)
     }
 
+    @Test("a field that stays empty is not evidence either way")
+    func emptyFieldIsUnknown() {
+        // Google Docs takes a paste through a hidden input it keeps empty.
+        let empty = State(characterCount: 0, selectionLocation: 0, selectionLength: 0)
+        #expect(PasteLanding.verdict(before: empty, after: empty) == .unknown)
+    }
+
     @Test("an unreadable field is not evidence either way")
     func unreadableIsUnknown() {
         let state = State(characterCount: 10, selectionLocation: 4, selectionLength: 0)

@@ -26,13 +26,18 @@ public enum PasteLanding {
     public enum Verdict: Equatable, Sendable {
         case landed
         case notLanded
-        /// One side could not be read. Not evidence either way, so the caller
-        /// falls back to trusting the promise.
+        /// Not evidence either way, so the caller falls back to trusting the
+        /// promise. A false "not landed" is the costly mistake — it invites the
+        /// user to paste a second time.
         case unknown
     }
 
     public static func verdict(before: FieldState?, after: FieldState?) -> Verdict {
         guard let before, let after else { return .unknown }
+        // An empty field proves nothing: editors that take a paste through a
+        // hidden input — Google Docs — keep that input empty whether or not
+        // the paste landed.
+        guard before.characterCount > 0 else { return .unknown }
         return before == after ? .notLanded : .landed
     }
 }

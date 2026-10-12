@@ -441,9 +441,15 @@ final class DictationCoordinator {
                 AXContextReader.read(includingText: includingText)
             }.value
             guard session == self.session else { return }
-            focus?.element = field?.element
-            focus?.selection = field?.selection
             screenContext = field?.text
+            // The keyboard can belong to another process than the frontmost
+            // app — a panel that takes keys without activating, as Spotlight
+            // does. That field is not where the paste is going, and raising
+            // it at delivery would be wrong.
+            if let field, field.element.pid == focus?.pid {
+                focus?.element = field.element
+                focus?.selection = field.selection
+            }
         }
     }
 

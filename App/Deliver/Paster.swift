@@ -102,10 +102,13 @@ enum Paster {
             return .copiedOnly
         }
 
-        // Read after refocusing, so it describes the field the paste is about
-        // to land in. Nil when there is nothing to compare against later.
-        let field = pasteTarget(in: focus.pid)
-        let before = field.flatMap(fieldState)
+        // The field the paste is aimed at: the one the dictation started in,
+        // or — with no such field, as for Paste Last Transcript — whatever the
+        // app has focused now. Measured itself, never "whatever has focus
+        // later", and only while it holds the app's focus. Nil `before` means
+        // no check: the promise alone decides, as it did before this existed.
+        let aimedAt = focus.element?.raw ?? focusedElement(in: focus.pid)
+        let before = aimedAt.flatMap { checkableState(of: $0, in: focus.pid) }
 
         let snapshot = ClipboardSnapshot.capture()
 
@@ -137,7 +140,7 @@ enum Paster {
         // Read is not the same as landed: a field that cannot take text, or a
         // clipboard manager answering in the target's place, both satisfy the
         // promise. Same handling as an unread paste, and for the same reason.
-        if let field, let before, await !landed(in: field, before: before) {
+        if let aimedAt, let before, await !landed(in: aimedAt, pid: focus.pid, before: before) {
             Log.deliver.notice("Paste was read but the field did not change — copied only")
             writePlainText(text)
             return .copiedOnly
@@ -208,19 +211,38 @@ enum Paster {
         return restored
     }
 
-    /// The element about to receive the paste, if it can be checked afterwards.
-    ///
-    /// Requires a readable role, and refuses a secure field: even a password's
-    /// length is not this app's business.
     @MainActor
-    private static func pasteTarget(in pid: pid_t) -> AXUIElement? {
+    private static func focusedElement(in pid: pid_t) -> AXUIElement? {
         let budget = AX.budget(total: fieldReadBudget, perCallCap: fieldReadCallCap)
-        let app = AXUIElementCreateApplication(pid)
-        guard let element = AX.element(kAXFocusedUIElementAttribute, of: app, within: budget),
-              let role = AX.string(kAXRoleAttribute, of: element, within: budget),
+        return AX.element(
+            kAXFocusedUIElementAttribute, of: AXUIElementCreateApplication(pid), within: budget)
+    }
+
+    /// Whether `element` is the app's focused element right now.
+    ///
+    /// Chromium and Electron apply a refocus a beat late, and until they do the
+    /// paste is not going into the field being measured. Unreadable counts as
+    /// no.
+    @MainActor
+    private static func hasFocus(_ element: AXUIElement, in pid: pid_t) -> Bool {
+        guard let current = focusedElement(in: pid) else { return false }
+        return CFEqual(current, element)
+    }
+
+    /// The aimed-at field's state before the paste, when the check afterwards
+    /// can be trusted: the field has the app's focus, its role is readable, and
+    /// it is not a password field — even a password's length is not this
+    /// app's business.
+    @MainActor
+    private static func checkableState(
+        of element: AXUIElement, in pid: pid_t
+    ) -> PasteLanding.FieldState? {
+        guard hasFocus(element, in: pid) else { return nil }
+        let budget = AX.budget(total: fieldReadBudget, perCallCap: fieldReadCallCap)
+        guard let role = AX.string(kAXRoleAttribute, of: element, within: budget),
               role != "AXSecureTextField"
         else { return nil }
-        return element
+        return fieldState(of: element)
     }
 
     /// The field's length and selection — two numbers, never its text.
@@ -236,16 +258,20 @@ enum Paster {
             selectionLength: selection.length)
     }
 
-    /// Watches the field until the paste shows up, or the timeout passes.
+    /// Watches the aimed-at field until the paste shows up, or the timeout
+    /// passes.
     ///
-    /// A field that stops being readable part-way counts as landed: that is not
-    /// evidence of a failure, and the promise already said the target read it.
+    /// Anything uncertain counts as landed — the field stops being readable,
+    /// or stops holding the app's focus — because a false "copied" invites the
+    /// user to paste a second time, and the promise already said the target
+    /// read it.
     @MainActor
     private static func landed(
-        in field: AXUIElement, before: PasteLanding.FieldState
+        in field: AXUIElement, pid: pid_t, before: PasteLanding.FieldState
     ) async -> Bool {
         var waited = Duration.zero
         while true {
+            guard hasFocus(field, in: pid) else { return true }
             let verdict = PasteLanding.verdict(before: before, after: fieldState(of: field))
             if verdict != .notLanded { return true }
             guard waited < landingTimeout else { return false }

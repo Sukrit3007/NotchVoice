@@ -110,4 +110,11 @@ enum AX {
 /// never used from two threads at the same time.
 struct AXElement: @unchecked Sendable {
     let raw: AXUIElement
+
+    /// The process the element belongs to. Read from the reference itself,
+    /// not over IPC.
+    var pid: pid_t? {
+        var pid: pid_t = 0
+        return AXUIElementGetPid(raw, &pid) == .success ? pid : nil
+    }
 }

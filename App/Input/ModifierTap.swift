@@ -474,6 +474,13 @@ private final class TapState: Sendable {
             return false
         }
 
+        // Our own ⌘V passes through untouched. Otherwise the paste-last
+        // chord's pairing swallows its key-up while the user still holds V,
+        // and a binding believed held would count it as another key.
+        if event.getIntegerValueField(.eventSourceUserData) == Paster.syntheticEventMarker {
+            return false
+        }
+
         // Kept as Int64 deliberately. This runs on every keystroke in every
         // app, and `UInt16(someInt64)` traps on an out-of-range value; a
         // malformed or synthetic event must not be able to kill the process

@@ -26,6 +26,11 @@ enum Paster {
 
     private static let deliveryGate = DeliveryGate()
 
+    /// Stamped on every keystroke this app posts, in `eventSourceUserData`, so
+    /// the app's own event tap can tell them from the user's and leave them
+    /// alone. Any constant works; this one spells "NVPS".
+    static let syntheticEventMarker: Int64 = 0x4E56_5053
+
     /// How long to wait for the target to ask for the promised data.
     ///
     /// Generous relative to the old blind 150ms wait, because this one is doing
@@ -314,6 +319,8 @@ enum Paster {
 
         down.flags = .maskCommand
         up.flags = .maskCommand
+        down.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+        up.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
         down.post(tap: .cgSessionEventTap)
         up.post(tap: .cgSessionEventTap)
         return true

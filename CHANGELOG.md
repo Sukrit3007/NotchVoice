@@ -10,14 +10,19 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - Dictation fits the text around the cursor. Mid-sentence it arrives with a
-  space in front and a lower-case first word — "I think that's fine.", not
-  "I thinkThat's fine." — and without a full stop when the sentence carries on
-  past the cursor. "I", acronyms, your custom words, snippet expansions and
-  names the field already capitalises keep their capitals, and a selection is
-  replaced without doubled spaces. Done by fixed rules, not the cleanup model,
-  using a little of the text either side of the cursor read at key-down; it is
-  never stored or logged. Skipped — the text pastes as before — for password
-  fields, apps that don't expose their text, a cursor that moved during a
+  space in front and without a full stop when the sentence carries on past the
+  cursor, and a selection is replaced without doubled spaces. Nothing is spaced
+  inside a word or after `#`, `$`, `@` or `/`. In English, a first word that is
+  only capitalised for starting a sentence is lowered — "I think that's fine.",
+  not "I thinkThat's fine." — but only when the system spell checker knows it
+  in lower case and it is not a month, weekday or language, so "Monday",
+  "Sarah" and "English" keep their capitals, as do "I", acronyms, your custom
+  words and snippet expansions. Other languages, and automatic detection, keep
+  every capital. Done by fixed rules, not the cleanup model, using a little of
+  the text either side of the cursor read at key-down; it is never stored or
+  logged. Skipped — the text pastes as before — for password fields, apps that
+  don't expose their text, a cursor at the very start of a field (an empty
+  editor can report its placeholder as text), a cursor that moved during a
   hands-free take, or with "Use what's on screen" off.
 - Paste Last Transcript: `⌃⌘V`, or the menu bar item, pastes the most recent
   dictation again into whatever has focus — for a paste that went somewhere
@@ -88,8 +93,11 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   different identity — granted in System Settings, refused anyway — can now be
   told apart from a real denial in Console.
 - Snippets expand after cleanup instead of before it, so an address, a sign-off
-  or a link arrives exactly as you wrote it rather than tidied like speech.
-  Dictionary corrections still run first, so cleanup works on the right words.
+  or a link arrives exactly as you wrote it rather than tidied like speech. A
+  trigger still matches when cleanup has put commas, full stops, dashes or a
+  line break between its words — "best regards sukrit" is found in "Best
+  regards, Sukrit." Dictionary corrections still run first, and still match
+  exactly, so cleanup works on the right words.
 
 ### Removed
 

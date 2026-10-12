@@ -38,7 +38,15 @@ public enum TranscriptRewriter {
         public var didChange: Bool { !applied.isEmpty }
     }
 
-    public static func apply(_ rules: [Rule], to text: String) -> Result {
+    /// - Parameter acrossPunctuation: match a rule's words even where the
+    ///   text has punctuation, a dash or a line break between them, not only
+    ///   the spaces the rule has. For snippets, which run on cleaned-up text:
+    ///   cleanup turns "best regards sukrit" into "Best regards, Sukrit." and
+    ///   the trigger must still be found. Corrections run on the raw
+    ///   transcript and match exactly.
+    public static func apply(
+        _ rules: [Rule], to text: String, acrossPunctuation: Bool = false
+    ) -> Result {
         // Empty matches would match everywhere and never advance the cursor.
         let usable = rules.filter { !$0.match.isEmpty }
         guard !usable.isEmpty, !text.isEmpty else {
@@ -48,7 +56,9 @@ public enum TranscriptRewriter {
         // Longest first, so "cuber netties" wins over a separate rule for
         // "netties" at the same position rather than losing to whichever
         // happened to be added first.
-        let ordered = usable.sorted { $0.match.count > $1.match.count }
+        let ordered = usable
+            .sorted { $0.match.count > $1.match.count }
+            .map { (rule: $0, exact: Array($0.match), words: acrossPunctuation ? words(of: $0.match) : nil) }
 
         let characters = Array(text)
         var output = ""
@@ -58,17 +68,22 @@ public enum TranscriptRewriter {
         while index < characters.count {
             var matched = false
 
-            for rule in ordered {
-                let candidate = Array(rule.match)
-                guard index + candidate.count <= characters.count else { continue }
-                guard hasBoundaries(in: characters, at: index, length: candidate.count) else {
-                    continue
+            for (rule, exact, words) in ordered {
+                let length: Int?
+                if let words {
+                    length = looseLength(of: words, in: characters, at: index)
+                } else {
+                    length = index + exact.count <= characters.count
+                        && equalsIgnoringCase(characters, at: index, exact)
+                        ? exact.count : nil
                 }
-                guard equalsIgnoringCase(characters, at: index, candidate) else { continue }
+                guard let length,
+                      hasBoundaries(in: characters, at: index, length: length)
+                else { continue }
 
                 output += rule.replacement
                 if !applied.contains(rule.match) { applied.append(rule.match) }
-                index += candidate.count
+                index += length
                 matched = true
                 break
             }
@@ -100,6 +115,38 @@ public enum TranscriptRewriter {
             return false
         }
         return true
+    }
+
+    /// What cleanup may put between two spoken words.
+    private static func isSeparator(_ character: Character) -> Bool {
+        character.isWhitespace || ",.;:!?-–—".contains(character)
+    }
+
+    /// A rule's words, or nil when it has none to match loosely — all
+    /// punctuation, say — and must be matched as written.
+    private static func words(of match: String) -> [[Character]]? {
+        let words = match.split(whereSeparator: isSeparator).map(Array.init)
+        return words.isEmpty ? nil : words
+    }
+
+    /// How many characters at `start` spell `words` in order, with at least
+    /// one separator between each pair, or nil if they don't.
+    private static func looseLength(
+        of words: [[Character]], in characters: [Character], at start: Int
+    ) -> Int? {
+        var index = start
+        for (position, word) in words.enumerated() {
+            if position > 0 {
+                let gap = index
+                while index < characters.count, isSeparator(characters[index]) { index += 1 }
+                guard index > gap else { return nil }
+            }
+            guard index + word.count <= characters.count,
+                  equalsIgnoringCase(characters, at: index, word)
+            else { return nil }
+            index += word.count
+        }
+        return index - start
     }
 
     /// Case-insensitive comparison at a position, without allocating a substring

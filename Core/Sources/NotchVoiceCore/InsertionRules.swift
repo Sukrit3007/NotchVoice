@@ -39,19 +39,20 @@ public enum InsertionRules {
         /// Nil when the range does not fit inside the value: the app's caret
         /// and its text disagree, and nothing decided from them can be trusted.
         ///
-        /// `placeholder` is the field's own: some fields report it as their
-        /// value while empty, and its text is not something to join onto.
-        public init?(
-            value: String, selectionLocation: Int, selectionLength: Int, placeholder: String? = nil
-        ) {
-            if let placeholder, !placeholder.isEmpty, value == placeholder {
-                self.init(before: "", after: "")
-                return
-            }
+        /// A caret at the very start keeps nothing after it. An empty editor
+        /// can expose its placeholder — "Ask anything", "Message #general" —
+        /// as its value, with the caret at 0, and there is no telling that
+        /// from real text. Ignoring it costs only a dictation at the start of
+        /// a non-empty field, which then pastes as it did before these rules.
+        public init?(value: String, selectionLocation: Int, selectionLength: Int) {
             let units = value.utf16
             let end = selectionLocation + selectionLength
             guard selectionLocation >= 0, selectionLength >= 0, end <= units.count else {
                 return nil
+            }
+            guard end > 0 else {
+                self.init(before: "", after: "")
+                return
             }
             let index = { units.index(units.startIndex, offsetBy: $0) }
             let lower = max(0, selectionLocation - Self.window)
@@ -80,13 +81,30 @@ public enum InsertionRules {
         public let adjustments: [Adjustment]
     }
 
+    /// Languages whose capitals mid-sentence can be lowered at all. Only
+    /// English: German capitalises every noun, Turkish lowers `I` to `ı`, and
+    /// the Spanish and French spell checkers accept names in lower case
+    /// ("maría", "paris"), so a word check cannot protect them there.
+    public static let lowercasingLanguages: Set<String> = ["en"]
+
     /// The dictation as it should land between `surroundings`.
     ///
     /// `terms` are spellings whose capitals are deliberate — custom words,
     /// snippet expansions. A dictation that starts with one keeps its capital
     /// even mid-sentence.
+    ///
+    /// A first word is lowered only in a `language` listed in
+    /// `lowercasingLanguages`, and only when `isWord` says its lower-case
+    /// form is an ordinary word — which "january", "sarah" and "london" are
+    /// not. Unsure keeps the capital: a capital left mid-sentence is how the
+    /// text pasted before these rules, a name lowered is damage. The default
+    /// never lowers.
     public static func fit(
-        _ text: String, between surroundings: Surroundings, keepingCaseOf terms: [String] = []
+        _ text: String,
+        between surroundings: Surroundings,
+        keepingCaseOf terms: [String] = [],
+        language: String? = nil,
+        isWord: (String) -> Bool = { _ in false }
     ) -> Fit {
         let before = surroundings.before
         let after = surroundings.after
@@ -99,8 +117,13 @@ public enum InsertionRules {
 
         var adjustments: [Adjustment] = []
         let continuing = continuesSentence(before)
+        // Replacing part of a word or identifier — "get[User]Name". It joins
+        // as it is: no spaces, and its capitals may be the camel case.
+        let insideWord = isWordCharacter(before.last) && isWordCharacter(after.first)
 
-        if continuing, let lowered = lowercasingFirstWord(of: body, near: before + " " + after, terms: terms) {
+        if continuing, !insideWord, language.map(lowercases(in:)) == true,
+           let lowered = lowercasingFirstWord(
+               of: body, near: before + " " + after, terms: terms, isWord: isWord) {
             body = lowered
             adjustments.append(.lowercased)
         }
@@ -110,17 +133,28 @@ public enum InsertionRules {
             adjustments.append(.droppedPeriod)
         }
 
-        if needsSpace(before.dropLast().last, before.last, body.first, body.dropFirst().first) {
+        if !insideWord, needsSpace(before.dropLast().last, before.last, body.first, body.dropFirst().first) {
             body = " " + body
             adjustments.append(.leadingSpace)
         }
 
-        if needsSpace(body.dropLast().last, body.last, after.first, after.dropFirst().first) {
+        if !insideWord, needsSpace(body.dropLast().last, body.last, after.first, after.dropFirst().first) {
             body += " "
             adjustments.append(.trailingSpace)
         }
 
         return Fit(text: body, adjustments: adjustments)
+    }
+
+    /// "en", "en-GB" and "en_US" are all English.
+    private static func lowercases(in language: String) -> Bool {
+        let code = language.prefix { $0 != "-" && $0 != "_" }.lowercased()
+        return lowercasingLanguages.contains(code)
+    }
+
+    private static func isWordCharacter(_ character: Character?) -> Bool {
+        guard let character else { return false }
+        return character.isLetter || character.isNumber || character == "_"
     }
 
     // MARK: - Casing
@@ -147,11 +181,13 @@ public enum InsertionRules {
         word.drop { "([{“‘«\"'".contains($0) }
     }
 
-    /// The text with its first letter lowered, or nil when that capital is
-    /// not just the start of a sentence: "I", an acronym, a mixed-case name,
-    /// a term the user spelled, or a word the surrounding text capitalises
-    /// mid-sentence — which is as close to "a name" as can be told locally.
-    static func lowercasingFirstWord(of text: String, near context: String, terms: [String]) -> String? {
+    /// The text with its first letter lowered, or nil when that capital may
+    /// be more than the start of a sentence: "I", an acronym, a mixed-case
+    /// name, a term the user spelled, a word the surrounding text capitalises
+    /// mid-sentence, or a word whose lower-case form `isWord` does not know.
+    static func lowercasingFirstWord(
+        of text: String, near context: String, terms: [String], isWord: (String) -> Bool
+    ) -> String? {
         guard let first = text.first, first.isUppercase else { return nil }
         let word = text.prefix { $0.isLetter || $0.isNumber || "'’-".contains($0) }
 
@@ -159,6 +195,7 @@ public enum InsertionRules {
         if word.dropFirst().contains(where: \.isUppercase) { return nil }
         if terms.contains(where: { startsWith(text, term: $0) }) { return nil }
         if isCapitalisedMidSentence(leadingLetters(of: text), in: context) { return nil }
+        guard isWord(first.lowercased() + word.dropFirst()) else { return nil }
 
         return first.lowercased() + text.dropFirst()
     }
@@ -237,9 +274,10 @@ public enum InsertionRules {
         if left.isWhitespace || right.isWhitespace { return false }
         // Chinese and Japanese are written without spaces between words.
         if isCJK(left) || isCJK(right) { return false }
-        // Nothing after an opening bracket or quote, or inside a path, an
-        // address or a handle: "foo(", "example.com/", "@".
-        if opensGroup(left, after: outerLeft) || left == "/" || left == "@" { return false }
+        // Nothing after an opening bracket or quote, or after a character
+        // that prefixes what follows: "foo(", "example.com/", "@name",
+        // "#channel", "$5".
+        if opensGroup(left, after: outerLeft) || "/@#$".contains(left) { return false }
         // Nothing before punctuation or a closing bracket or quote.
         if ".,;:!?".contains(right) || closesGroup(right, before: outerRight) { return false }
         return true

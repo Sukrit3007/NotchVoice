@@ -564,7 +564,8 @@ final class DictationCoordinator {
                 // Last, and only for the paste: history, the clipboard and
                 // Paste Last keep `text` as written, since none of them land
                 // between these words.
-                let fitted = await fit(text, between: surroundings)
+                let fitted = await fit(
+                    text, between: surroundings, language: language == "auto" ? nil : language)
 
                 let outcome = await Paster.deliver(text, fitted: fitted, to: target)
                 Log.deliver.info(
@@ -679,7 +680,10 @@ final class DictationCoordinator {
             let rules = try await store.rewriteRules(kind)
             guard !rules.isEmpty else { return text }
 
-            let result = TranscriptRewriter.apply(rules, to: text)
+            // Snippets run on cleaned-up text, which has commas and breaks
+            // the spoken trigger did not.
+            let result = TranscriptRewriter.apply(
+                rules, to: text, acrossPunctuation: kind == .snippets)
             if result.didChange {
                 Log.dictation.info(
                     "Rewrote \(result.applied.count, privacy: .public) phrase(s)")
@@ -700,8 +704,11 @@ final class DictationCoordinator {
     ///
     /// Whether the caret is still where the words were read is for `Paster`
     /// to decide, at the moment of the paste.
+    ///
+    /// `language` is the one dictation was set to, nil when detected — which
+    /// leaves every capital alone, since the language is then not known.
     private func fit(
-        _ text: String, between surroundings: InsertionRules.Surroundings?
+        _ text: String, between surroundings: InsertionRules.Surroundings?, language: String?
     ) async -> String? {
         guard let surroundings else { return nil }
         let terms: [String]
@@ -712,7 +719,9 @@ final class DictationCoordinator {
                 "Cased terms unavailable: \(error.localizedDescription, privacy: .public)")
             terms = []
         }
-        let fit = InsertionRules.fit(text, between: surroundings, keepingCaseOf: terms)
+        let fit = InsertionRules.fit(
+            text, between: surroundings, keepingCaseOf: terms, language: language,
+            isWord: { word in language.map { LowercaseWords.contains(word, language: $0) } ?? false })
         // What changed, never the text either side.
         Log.dictation.info(
             "Fitted to the caret: [\(fit.adjustments.map(\.rawValue).joined(separator: ", "), privacy: .public)]")

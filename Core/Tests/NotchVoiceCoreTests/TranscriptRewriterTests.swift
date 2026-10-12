@@ -130,6 +130,56 @@ struct TranscriptRewriterTests {
         let result = rewrite("привет мир", [("мир", "world")])
         #expect(result.text == "привет world")
     }
+
+    // MARK: - Across punctuation (snippets, after cleanup)
+
+    private func expand(_ text: String, _ rules: [(String, String)]) -> TranscriptRewriter.Result {
+        TranscriptRewriter.apply(
+            rules.map { TranscriptRewriter.Rule(match: $0.0, replacement: $0.1) },
+            to: text, acrossPunctuation: true)
+    }
+
+    @Test("a trigger is found across the punctuation, case and breaks cleanup adds",
+          arguments: [
+            "Best regards, Sukrit.",
+            "best regards sukrit",
+            "Best regards,\nSukrit",
+            "Best regards — Sukrit!",
+            "Best regards; sukrit?",
+          ])
+    func triggerAcrossPunctuation(_ text: String) {
+        let result = expand(text, [("best regards sukrit", "SIGNATURE")])
+        #expect(result.applied == ["best regards sukrit"])
+        #expect(result.text.hasPrefix("SIGNATURE"))
+    }
+
+    @Test("punctuation after the trigger is left in place")
+    func trailingPunctuationStays() {
+        // The sentence around a snippet keeps its own stops and commas.
+        #expect(expand("Send it to my address. Thanks.", [("my address", "221B Baker St")]).text
+                == "Send it to 221B Baker St. Thanks.")
+    }
+
+    @Test("words must still be separated, whole and in order")
+    func looseMatchingIsNotSloppy() {
+        let rules = [("best regards", "X")]
+        #expect(!expand("bestregards", rules).didChange)
+        #expect(!expand("best regardsx", rules).didChange)
+        #expect(!expand("regards, best", rules).didChange)
+        #expect(!expand("best of regards", rules).didChange)
+    }
+
+    @Test("a trigger written with punctuation matches it spoken without")
+    func punctuatedTrigger() {
+        #expect(expand("sign off now", [("sign-off", "Cheers")]).text == "Cheers now")
+    }
+
+    @Test("corrections still match exactly")
+    func correctionsStayExact() {
+        // Corrections run on the raw transcript, before cleanup has had a
+        // chance to add anything.
+        #expect(!rewrite("cuber, netties", [("cuber netties", "Kubernetes")]).didChange)
+    }
 }
 
 @Suite("BiasPrompt")

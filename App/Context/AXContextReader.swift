@@ -72,7 +72,7 @@ enum AXContextReader {
             text: value.flatMap {
                 $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0
             },
-            surroundings: surroundings(of: focused, value: value, selection: selection, within: budget))
+            surroundings: surroundings(value: value, selection: selection))
     }
 
     /// The field's whole value, or nil for every refusal — a secure field, an
@@ -93,19 +93,13 @@ enum AXContextReader {
     /// call of its own, and only where the caret is known, which is only for
     /// a role known not to be a password field.
     private static func surroundings(
-        of focused: AXUIElement, value: String?, selection: CFRange?, within budget: AXBudget
+        value: String?, selection: CFRange?
     ) -> InsertionRules.Surroundings? {
         guard let value, let selection else { return nil }
-        // A field showing its placeholder can report it as its value, caret
-        // at the start. Asked only then, so an ordinary read pays nothing.
-        let placeholder = selection.location == 0 && !value.isEmpty
-            ? AX.string(kAXPlaceholderValueAttribute, of: focused, within: budget)
-            : nil
         return InsertionRules.Surroundings(
             value: value,
             selectionLocation: selection.location,
-            selectionLength: selection.length,
-            placeholder: placeholder)
+            selectionLength: selection.length)
     }
 }
 

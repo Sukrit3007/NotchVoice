@@ -9,20 +9,34 @@ struct Golden: CustomTestStringConvertible, Sendable {
     let after: String
     let expected: String
     var terms: [String] = []
+    var language: String?
 
-    init(_ before: String, _ text: String, _ after: String, _ expected: String, terms: [String] = []) {
+    init(
+        _ before: String, _ text: String, _ after: String, _ expected: String,
+        terms: [String] = [], language: String? = "en"
+    ) {
         self.before = before
         self.text = text
         self.after = after
         self.expected = expected
         self.terms = terms
+        self.language = language
     }
+
+    /// Stands in for the App's spell check: the lower-case words these rows
+    /// lower. Anything missing — "january", "sarah" — is not a word, as the
+    /// real check says (see the App's `LowercaseWords`).
+    static let words: Set<String> = [
+        "that's", "plums", "yes", "a", "apples", "world", "big", "in", "thanks",
+        "bar", "below", "hi", "account", "auto", "general",
+    ]
 
     var testDescription: String { "\(before.debugDescription) ‸ \(after.debugDescription) → \(expected.debugDescription)" }
 
     var result: String {
         let fit = InsertionRules.fit(
-            text, between: .init(before: before, after: after), keepingCaseOf: terms)
+            text, between: .init(before: before, after: after), keepingCaseOf: terms,
+            language: language, isWord: { Self.words.contains($0) })
         return before + fit.text + after
     }
 }
@@ -77,27 +91,35 @@ struct InsertionRulesTests {
     ])
     func keptCapitals(_ row: Golden) { #expect(row.result == row.expected) }
 
-    @Test("a capital only the context capitalises at a sentence start is lowered", arguments: [
-        // "Priya" opens the sentence in the field, so nothing says it is a name.
-        Golden("Priya called. I said ", "Priya agreed.", "", "Priya called. I said priya agreed."),
-        // A term only counts spelled the same way, as a whole word.
-        Golden("I spoke with ", "Sukrita today.", "", "I spoke with sukrita today.", terms: ["Sukrit"]),
+    @Test("unsure keeps the capital", arguments: [
+        // Not ordinary words in lower case: months, days, languages, names.
+        Golden("Due in ", "January.", "", "Due in January."),
+        Golden("Let's meet on ", "Monday at 3.", "", "Let's meet on Monday at 3."),
+        Golden("She speaks ", "English.", "", "She speaks English."),
+        Golden("I spoke to ", "Sarah", " yesterday", "I spoke to Sarah yesterday"),
+        Golden("Priya called. I said ", "Priya agreed.", "", "Priya called. I said Priya agreed."),
+        Golden("and then ", "I left.", "", "and then I left."),
+        // German capitalises every noun, so nothing is lowered there.
+        Golden("Ich habe gestern ein ", "Auto gekauft.", "", "Ich habe gestern ein Auto gekauft.", language: "de"),
+        // Turkish lowers I to ı; detected languages are unknown.
+        Golden("ve ", "In the box.", "", "ve In the box.", language: "tr"),
+        Golden("I think ", "That's fine.", "", "I think That's fine.", language: nil),
     ])
-    func loweredDespiteContext(_ row: Golden) { #expect(row.result == row.expected) }
+    func unsureKeepsCapital(_ row: Golden) { #expect(row.result == row.expected) }
 
     @Test("before existing text: no stop when the sentence carries on", arguments: [
-        Golden("", "Hello.", "world is big", "Hello world is big"),
+        Golden("Intro\n", "Hello.", "world is big", "Intro\nHello world is big"),
         Golden("I went to the ", "Big.", "store.", "I went to the big store."),
         Golden("Hello ", "Big.", ", friend", "Hello big, friend"),
         Golden("Hello ", "Big.", "  world", "Hello big  world"),
-        Golden("", "Buy.", "2 apples", "Buy 2 apples"),
+        Golden("Intro\n", "Buy.", "2 apples", "Intro\nBuy 2 apples"),
         Golden("Yesterday ", "In the evening.", "I went home.", "Yesterday in the evening I went home."),
-        Golden("", "Done. ", " rest", "Done rest"),
+        Golden("Intro\n", "Done. ", " rest", "Intro\nDone rest"),
     ])
     func beforeExistingText(_ row: Golden) { #expect(row.result == row.expected) }
 
     @Test("a whole sentence slotted in before another keeps its stop", arguments: [
-        Golden("", "Hello.", "The end.", "Hello. The end."),
+        Golden("Intro\n", "Hello.", "The end.", "Intro\nHello. The end."),
         Golden("One. ", "Two.", "Three.", "One. Two. Three."),
         Golden("Hello. ", "Thanks.", "I agree.", "Hello. Thanks. I agree."),
     ])
@@ -163,10 +185,28 @@ struct InsertionRulesTests {
     ])
     func cjk(_ row: Golden) { #expect(row.result == row.expected) }
 
-    @Test("other cased scripts follow the same rules", arguments: [
-        Golden("Я думаю", "Это хорошо.", "", "Я думаю это хорошо."),
+    @Test("other languages are spaced and stopped, but keep their capitals", arguments: [
+        Golden("Я думаю", "Это хорошо.", "", "Я думаю Это хорошо.", language: "ru"),
+        Golden("Creo que", "Es posible.", " ahora", "Creo que Es posible ahora", language: "es"),
     ])
-    func otherScripts(_ row: Golden) { #expect(row.result == row.expected) }
+    func otherLanguages(_ row: Golden) { #expect(row.result == row.expected) }
+
+    @Test("part of a word or identifier joins without spaces", arguments: [
+        // "get[User]Name" with "User" selected.
+        Golden("get", "Account.", "Name", "getAccountName"),
+        // A bare caret inside "getUser|Name".
+        Golden("getUser", "Account.", "Name", "getUserAccountName"),
+        Golden("snake_", "Case.", "_name", "snake_Case_name"),
+    ])
+    func insideAWord(_ row: Golden) { #expect(row.result == row.expected) }
+
+    @Test("no space after a prefix character", arguments: [
+        Golden("join #", "General.", "", "join #General."),
+        Golden("costs $", "5.", "", "costs $5."),
+        Golden("ping @", "Priya.", "", "ping @Priya."),
+        Golden("open ~/", "Notes.", "", "open ~/Notes."),
+    ])
+    func prefixCharacters(_ row: Golden) { #expect(row.result == row.expected) }
 
     @Test("newlines in the dictation are content, not spacing", arguments: [
         Golden("Hi", "\nBest regards", "", "Hi\nBest regards"),
@@ -178,13 +218,24 @@ struct InsertionRulesTests {
 
     @Test("each change is reported, and nothing else")
     func reportsAdjustments() {
-        let fit = InsertionRules.fit("Big.", between: .init(before: "Hello", after: "world"))
+        let fit = InsertionRules.fit(
+            "Big.", between: .init(before: "Hello,", after: "world"),
+            language: "en", isWord: { _ in true })
         #expect(fit.text == " big ")
         #expect(fit.adjustments == [.lowercased, .droppedPeriod, .leadingSpace, .trailingSpace])
 
         let untouched = InsertionRules.fit("Hello.", between: .init(before: "", after: ""))
         #expect(untouched.text == "Hello.")
         #expect(untouched.adjustments.isEmpty)
+    }
+
+    @Test("without a language and a word check, nothing is lowered")
+    func lowersNothingByDefault() {
+        let fit = InsertionRules.fit("That's fine.", between: .init(before: "I think ", after: ""))
+        #expect(fit.text == "That's fine.")
+        #expect(InsertionRules.fit(
+            "That's fine.", between: .init(before: "I think ", after: ""), language: "en-GB",
+            isWord: { _ in true }).text == "that's fine.")
     }
 
     @Test("an all-space dictation comes back as it was")
@@ -232,16 +283,18 @@ struct InsertionRulesTests {
         #expect(Surroundings(value: "short", selectionLocation: -1, selectionLength: 0) == nil)
     }
 
-    @Test("a placeholder reported as the value is an empty field")
-    func placeholderIsEmpty() {
-        let s = Surroundings(
-            value: "Message #general", selectionLocation: 0, selectionLength: 0,
-            placeholder: "Message #general")
+    @Test("a caret at the very start keeps nothing after it, which may be a placeholder")
+    func caretAtStartIgnoresAfter() {
+        // An empty composer can expose "Ask anything" as its value.
+        let s = Surroundings(value: "Ask anything", selectionLocation: 0, selectionLength: 0)
         #expect(s == Surroundings(before: "", after: ""))
-        // Real text that merely starts at the caret is kept.
-        let real = Surroundings(
-            value: "world", selectionLocation: 0, selectionLength: 0, placeholder: "Type here")
-        #expect(real == Surroundings(before: "", after: "world"))
+        let fit = InsertionRules.fit("Hello world.", between: s!)
+        #expect(fit.text == "Hello world.")
+        // A selection at the start is real text, so what follows it counts.
+        #expect(Surroundings(value: "Hello world", selectionLocation: 0, selectionLength: 5)
+                == Surroundings(before: "", after: " world"))
+        #expect(Surroundings(value: "", selectionLocation: 0, selectionLength: 0)
+                == Surroundings(before: "", after: ""))
     }
 
     @Test("a terminal's NUL padding reads as spaces, so nothing follows the caret")

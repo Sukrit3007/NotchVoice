@@ -33,19 +33,54 @@ enum AX {
         copy(attribute, of: element, within: budget) as? String
     }
 
-    /// Setting the timeout on the system-wide element sets it for the whole
-    /// process; on any other element it applies to that element alone. Either
-    /// way it is set again before every call, so nothing inherits a stale one.
+    @discardableResult
+    static func perform(
+        _ action: String, on element: AXUIElement, within budget: AXBudget
+    ) -> Bool {
+        guard arm(element, within: budget) else { return false }
+        return AXUIElementPerformAction(element, action as CFString) == .success
+    }
+
+    @discardableResult
+    static func set(
+        _ attribute: String, to value: Bool, of element: AXUIElement, within budget: AXBudget
+    ) -> Bool {
+        guard arm(element, within: budget) else { return false }
+        return AXUIElementSetAttributeValue(
+            element, attribute as CFString, value as CFBoolean) == .success
+    }
+
     private static func copy(
         _ attribute: String, of element: AXUIElement, within budget: AXBudget
     ) -> CFTypeRef? {
-        guard let timeout = budget.timeout(at: now) else { return nil }
-        AXUIElementSetMessagingTimeout(element, timeout)
+        guard arm(element, within: budget) else { return nil }
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success
         else { return nil }
         return value
     }
 
+    /// Sets the element's timeout from the budget, or says the budget is spent.
+    ///
+    /// Setting the timeout on the system-wide element sets it for the whole
+    /// process; on any other element it applies to that element alone. Either
+    /// way it is set again before every call, so nothing inherits a stale one.
+    private static func arm(_ element: AXUIElement, within budget: AXBudget) -> Bool {
+        guard let timeout = budget.timeout(at: now) else { return false }
+        AXUIElementSetMessagingTimeout(element, timeout)
+        return true
+    }
+
     private static var now: TimeInterval { ProcessInfo.processInfo.systemUptime }
+}
+
+/// An `AXUIElement` that can be handed from the thread that found it to the one
+/// that uses it.
+///
+/// `@unchecked` because Swift cannot vouch for a CF type. It is an immutable
+/// reference to an element in another process, and each one here is passed
+/// along once — found off the main thread at key-down, used on it at delivery —
+/// never used from two threads at the same time.
+struct AXElement: @unchecked Sendable {
+    let raw: AXUIElement
 }

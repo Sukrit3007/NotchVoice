@@ -33,6 +33,14 @@ enum Paster {
     private static let consumeTimeout = Duration.milliseconds(250)
     /// Time for the reactivated app to actually become frontmost.
     private static let activateSettleDelay = Duration.milliseconds(80)
+    /// Bounds every Accessibility call made to refocus the dictated field. The
+    /// app is frontmost and should answer at once; one that does not gets the
+    /// paste wherever its focus already is.
+    private static let refocusBudget: TimeInterval = 0.2
+    private static let refocusCallCap: TimeInterval = 0.1
+    /// Time for a refocused field to become first responder before ⌘V lands.
+    /// Only paid when focus actually had to be moved.
+    private static let refocusSettleDelay = Duration.milliseconds(50)
 
     static func isAccessibilityTrusted() -> Bool {
         AXIsProcessTrusted()
@@ -75,6 +83,10 @@ enum Paster {
             return .copiedOnly
         }
 
+        if let element = focus.element {
+            await refocus(element.raw, in: focus.pid)
+        }
+
         let snapshot = ClipboardSnapshot.capture()
 
         let promise = PastePromise(text: text)
@@ -110,6 +122,33 @@ enum Paster {
         }
 
         return .pasted
+    }
+
+    /// Puts keyboard focus back on the field the dictation started in.
+    ///
+    /// Re-activating the app restores its key window, not the field: a click
+    /// into another field or tab of the same app while transcription ran would
+    /// otherwise take the paste. Best effort — a field that is gone or will not
+    /// take focus leaves the paste going wherever focus is now, as it did
+    /// before this existed.
+    @MainActor
+    private static func refocus(_ element: AXUIElement, in pid: pid_t) async {
+        let budget = AX.budget(total: refocusBudget, perCallCap: refocusCallCap)
+        let app = AXUIElementCreateApplication(pid)
+
+        if let current = AX.element(kAXFocusedUIElementAttribute, of: app, within: budget),
+           CFEqual(current, element) {
+            return
+        }
+
+        if let window = AX.element(kAXWindowAttribute, of: element, within: budget) {
+            AX.perform(kAXRaiseAction, on: window, within: budget)
+        }
+        let refocused = AX.set(kAXFocusedAttribute, to: true, of: element, within: budget)
+        Log.deliver.info("Focus had moved within the app — refocused: \(refocused, privacy: .public)")
+        if refocused {
+            try? await Task.sleep(for: refocusSettleDelay)
+        }
     }
 
     @discardableResult

@@ -403,10 +403,11 @@ final class DictationCoordinator {
         setPhase(.recording)
         Cues.play(.start)
 
-        readScreenContext(for: session)
+        readFocusedField(for: session)
     }
 
-    /// Reads the field being dictated into, off the main thread.
+    /// Finds the field being dictated into — and its text, if reading it is
+    /// allowed — off the main thread.
     ///
     /// Still at key-down, because by the time transcription finishes the user
     /// has often clicked elsewhere — the field being dictated into is only
@@ -414,16 +415,18 @@ final class DictationCoordinator {
     /// so it cannot take focus from that field.
     ///
     /// Bounded by `AXContextReader`'s budget, which is shorter than the hold
-    /// threshold, so the text is normally in hand by key-up. If a wedged app
-    /// makes it later than that, the take is transcribed unbiased.
-    private func readScreenContext(for session: Int) {
-        guard ContextPreference.isEnabled else { return }
+    /// threshold, so the result is normally in hand by key-up. If a wedged app
+    /// makes it later than that, the take is transcribed unbiased and pasted
+    /// wherever the app's focus is by then.
+    private func readFocusedField(for session: Int) {
+        let includingText = ContextPreference.isEnabled
         Task {
-            let text = await Task.detached(priority: .userInitiated) {
-                AXContextReader.focusedText()
+            let field = await Task.detached(priority: .userInitiated) {
+                AXContextReader.read(includingText: includingText)
             }.value
             guard session == self.session else { return }
-            screenContext = text
+            focus?.element = field?.element
+            screenContext = field?.text
         }
     }
 

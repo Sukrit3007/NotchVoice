@@ -86,6 +86,10 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Pasting works on Dvorak and other layouts that move the V key. The synthetic
   ⌘V used to press whichever key sits where QWERTY's V is — ⌘K on Dvorak. It
   now presses the key that types "v" with ⌘ held on the current layout.
+- A dictation pastes into the field it started in, even if focus moved to
+  another field or tab of the same app while it was transcribing. The focused
+  element is remembered at key-down and focused again before ⌘V; if it is gone,
+  the paste goes wherever focus is, as before.
 
 ## [0.1.0] - 2026-09-08
 

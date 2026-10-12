@@ -12,6 +12,14 @@ struct FocusSnapshot: Sendable {
     /// still say "Slack" after Slack has been uninstalled.
     let appName: String?
 
+    /// The focused field inside that app, so delivery can put focus back on it.
+    ///
+    /// Filled in a moment after capture, by the Accessibility read that runs
+    /// off the main thread — finding it is IPC into the app, and the app is
+    /// not allowed to delay the key-down. Nil when that read has not finished
+    /// or the app exposes no focused element.
+    var element: AXElement?
+
     static func capture() -> FocusSnapshot? {
         guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
         return FocusSnapshot(

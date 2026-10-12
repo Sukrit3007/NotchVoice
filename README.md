@@ -97,6 +97,7 @@ macOS only permits that with Accessibility.
 | `Core/Tests` | `cd Core && swift test` | Pure logic — state machine, geometry, clipboard guard, island metrics, cleanup guards |
 | `AppTests` | `xcodebuild test -scheme NotchVoice -skipPackagePluginValidation` | Anything needing AppKit, SwiftData or the built bundle — the store, cue assets, failure copy against the wing it has to fit |
 | `Tools/SoundGen/Tests` | `cd Tools/SoundGen && swift test` | The cue synthesiser — click-freedom, envelope, level bounds |
+| Bench | `Tools/Bench/run.sh` | Latency and word error rate of the dictation pipeline on this Mac, against the installed model — see [`docs/benchmarks`](docs/benchmarks/README.md) |
 
 `AppTests` is hosted in the app so `Bundle.main` is the real bundle. The app
 detects it is hosting tests and skips starting its pipeline — otherwise every

@@ -32,7 +32,8 @@ struct DictationPane: View {
                 Text(
                     "Reads the text already in the field you're dictating into and "
                     + "suggests it to the speech model, so names and jargon already "
-                    + "on screen come out spelled right. Password fields are never "
+                    + "on screen come out spelled right, and fits what you dictate to "
+                    + "the words around the cursor. Password fields are never "
                     + "read. Nothing is stored and nothing leaves your Mac."
                 )
             }

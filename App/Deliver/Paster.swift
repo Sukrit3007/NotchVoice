@@ -75,8 +75,14 @@ enum Paster {
             ["AXTrustedCheckOptionPrompt": true] as CFDictionary)
     }
 
+    /// - Parameter fitted: `text` fitted to the words either side of the caret
+    ///   at key-down — see `InsertionRules`. Pasted in its place only while that
+    ///   caret is provably still where it was. Every Copy-only path keeps
+    ///   `text`: the user pastes that wherever they choose.
     @MainActor
-    static func deliver(_ text: String, to focus: FocusSnapshot?) async -> PasteOutcome {
+    static func deliver(
+        _ text: String, fitted: String? = nil, to focus: FocusSnapshot?
+    ) async -> PasteOutcome {
         await deliveryGate.acquire()
         defer { Task { await deliveryGate.release() } }
 
@@ -115,9 +121,18 @@ enum Paster {
         let aimedAt = focus.element?.raw ?? focusedElement(in: focus.pid)
         let before = aimedAt.flatMap { checkableState(of: $0, in: focus.pid) }
 
+        // A hands-free take leaves time to click or type elsewhere in the same
+        // field, and the words around a moved caret are not the ones read.
+        var pasted = text
+        if let fitted {
+            let unmoved = caretUnmoved(before, since: focus)
+            if unmoved { pasted = fitted }
+            Log.deliver.info("Caret unmoved since key-down: \(unmoved, privacy: .public)")
+        }
+
         let snapshot = ClipboardSnapshot.capture()
 
-        let promise = PastePromise(text: text)
+        let promise = PastePromise(text: pasted)
         let changeCountAfterWrite = promise.write()
 
         guard sendCommandV() else {
@@ -287,6 +302,18 @@ enum Paster {
               role != "AXSecureTextField"
         else { return nil }
         return fieldState(of: element)
+    }
+
+    /// Whether the aimed-at field's caret is the one captured at key-down.
+    ///
+    /// Read from `state`, the landing check's own reading, so it costs no
+    /// call. No reading — focus elsewhere, an unreadable field — is not proof.
+    private static func caretUnmoved(
+        _ state: PasteLanding.FieldState?, since focus: FocusSnapshot
+    ) -> Bool {
+        guard focus.element != nil, let state, let selection = focus.selection else { return false }
+        return state.selectionLocation == selection.location
+            && state.selectionLength == selection.length
     }
 
     /// The field's length and selection — two numbers, never its text.

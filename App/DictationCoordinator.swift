@@ -122,6 +122,9 @@ final class DictationCoordinator {
     /// never sent anywhere — see `AXContextReader`. Filled in shortly after
     /// key-down, by a read that runs off the main thread.
     @ObservationIgnored private var screenContext: String?
+    /// The text either side of the caret in that field, from the same read.
+    /// Never stored, never sent anywhere, never logged — see `InsertionRules`.
+    @ObservationIgnored private var surroundings: InsertionRules.Surroundings?
     @ObservationIgnored private var maxDurationTimer: Task<Void, Never>?
     @ObservationIgnored private var collapseTask: Task<Void, Never>?
 
@@ -418,6 +421,7 @@ final class DictationCoordinator {
         // Captured before any window is shown — see FocusSnapshot's note.
         focus = FocusSnapshot.capture()
         screenContext = nil
+        surroundings = nil
         resetWaveform()
 
         armMaxDurationTimer()
@@ -469,6 +473,7 @@ final class DictationCoordinator {
             if let field, field.element.pid == focus?.pid {
                 focus?.element = field.element
                 focus?.selection = field.selection
+                surroundings = field.surroundings
             }
         }
     }
@@ -515,6 +520,7 @@ final class DictationCoordinator {
         // which microphone actually heard this take.
         let micDevice = MicRecorder.currentInputName
         let context = screenContext
+        let surroundings = self.surroundings
 
         Task {
             let startedAt = Self.now()
@@ -555,7 +561,12 @@ final class DictationCoordinator {
                 // polish would reword or reformat it like speech.
                 let text = await rewrite(polished, .snippets)
 
-                let outcome = await Paster.deliver(text, to: target)
+                // Last, and only for the paste: history, the clipboard and
+                // Paste Last keep `text` as written, since none of them land
+                // between these words.
+                let fitted = await fit(text, between: surroundings)
+
+                let outcome = await Paster.deliver(text, fitted: fitted, to: target)
                 Log.deliver.info(
                     "Delivery: \(String(describing: outcome), privacy: .public) (target \(target?.bundleID ?? "none", privacy: .public))")
                 lastTranscript = text
@@ -680,6 +691,32 @@ final class DictationCoordinator {
                 "Rewrite rules unavailable: \(error.localizedDescription, privacy: .public)")
             return text
         }
+    }
+
+    /// The text as it should land between the words either side of the caret,
+    /// or nil when they are unknown — the read was late, the field is a
+    /// password field, the app does not expose its text, or reading it is
+    /// switched off. Nil pastes the text as it stands, as before this existed.
+    ///
+    /// Whether the caret is still where the words were read is for `Paster`
+    /// to decide, at the moment of the paste.
+    private func fit(
+        _ text: String, between surroundings: InsertionRules.Surroundings?
+    ) async -> String? {
+        guard let surroundings else { return nil }
+        let terms: [String]
+        do {
+            terms = try await store.casedTerms()
+        } catch {
+            Log.data.error(
+                "Cased terms unavailable: \(error.localizedDescription, privacy: .public)")
+            terms = []
+        }
+        let fit = InsertionRules.fit(text, between: surroundings, keepingCaseOf: terms)
+        // What changed, never the text either side.
+        Log.dictation.info(
+            "Fitted to the caret: [\(fit.adjustments.map(\.rawValue).joined(separator: ", "), privacy: .public)]")
+        return fit.text
     }
 
     /// Files a delivered dictation into history, or complains and moves on.

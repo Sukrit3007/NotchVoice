@@ -9,7 +9,8 @@ import NotchVoiceCore
 /// names, jargon and spellings of whatever the user is actually working on are
 /// usually already on screen, and nobody has to type them into a list first.
 /// The same read hands back the focused element itself, which delivery uses to
-/// put focus back where the dictation started.
+/// put focus back where the dictation started, and the text either side of the
+/// caret, which delivery fits the dictation to.
 ///
 /// **Three things this must never do**, in order of how badly they would matter:
 ///
@@ -64,16 +65,19 @@ enum AXContextReader {
         let selection = role.map { !refusedRoles.contains($0) } == true
             ? AX.range(kAXSelectedTextRangeAttribute, of: focused, within: budget)
             : nil
-        let text = includingText ? text(of: focused, role: role, within: budget) : nil
-        return FocusedField(element: AXElement(raw: focused), selection: selection, text: text)
+        let value = includingText ? value(of: focused, role: role, within: budget) : nil
+        return FocusedField(
+            element: AXElement(raw: focused),
+            selection: selection,
+            text: value.flatMap {
+                $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0
+            },
+            surroundings: surroundings(of: focused, value: value, selection: selection, within: budget))
     }
 
-    /// The text around the cursor, or nil when there is none worth having.
-    ///
-    /// Returns nil rather than an empty string for every refusal — a secure
-    /// field, an unreadable app, a field with nothing in it, a spent budget —
-    /// so the caller has one case to handle instead of five.
-    private static func text(
+    /// The field's whole value, or nil for every refusal — a secure field, an
+    /// unreadable app, a spent budget.
+    private static func value(
         of focused: AXUIElement, role: String?, within budget: AXBudget
     ) -> String? {
         // Checked before the value is requested, not after. Asking a password
@@ -81,12 +85,27 @@ enum AXContextReader {
         if let role, refusedRoles.contains(role) {
             return nil
         }
+        return AX.string(kAXValueAttribute, of: focused, within: budget)
+    }
 
-        guard let value = AX.string(kAXValueAttribute, of: focused, within: budget),
-              !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        else { return nil }
-
-        return value
+    /// The text either side of the caret, for fitting the dictation to it —
+    /// see `InsertionRules`. Cut from the value already read, so it costs no
+    /// call of its own, and only where the caret is known, which is only for
+    /// a role known not to be a password field.
+    private static func surroundings(
+        of focused: AXUIElement, value: String?, selection: CFRange?, within budget: AXBudget
+    ) -> InsertionRules.Surroundings? {
+        guard let value, let selection else { return nil }
+        // A field showing its placeholder can report it as its value, caret
+        // at the start. Asked only then, so an ordinary read pays nothing.
+        let placeholder = selection.location == 0 && !value.isEmpty
+            ? AX.string(kAXPlaceholderValueAttribute, of: focused, within: budget)
+            : nil
+        return InsertionRules.Surroundings(
+            value: value,
+            selectionLocation: selection.location,
+            selectionLength: selection.length,
+            placeholder: placeholder)
     }
 }
 
@@ -97,4 +116,7 @@ struct FocusedField: Sendable {
     let selection: CFRange?
     /// Never stored, never sent anywhere.
     let text: String?
+    /// The text either side of `selection`. Never stored, never sent
+    /// anywhere, never logged.
+    let surroundings: InsertionRules.Surroundings?
 }

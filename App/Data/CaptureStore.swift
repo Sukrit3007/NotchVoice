@@ -73,6 +73,14 @@ actor CaptureStore {
         }
     }
 
+    /// Spellings whose capitals are deliberate: custom words, and snippet
+    /// expansions, which the user wrote out in advance. A dictation that
+    /// starts with one keeps it as written when it lands mid-sentence.
+    func casedTerms() throws -> [String] {
+        try modelContext.fetch(FetchDescriptor<DictionaryEntry>()).map(\.phrase)
+            + modelContext.fetch(FetchDescriptor<Snippet>()).map(\.expansion)
+    }
+
     /// Records that a rewrite fired, against whichever kind of rule it was.
     func noteRewrites(_ matches: [String]) throws {
         guard !matches.isEmpty else { return }

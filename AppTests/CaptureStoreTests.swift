@@ -173,6 +173,19 @@ struct CaptureStoreTests {
         #expect(snippets.map(\.replacement) == ["221B Baker Street"])
     }
 
+    @Test("custom words and snippet expansions keep their capitals mid-sentence")
+    func casedTermsIncludeBoth() async throws {
+        // Both are spelled by the user; a correction's misheard form is not.
+        let stack = try DataStack.inMemory()
+        let context = ModelContext(stack.container)
+        context.insert(DictionaryEntry(phrase: "Kubernetes", misheardAs: "cuber netties"))
+        context.insert(Snippet(trigger: "my name", expansion: "Sukrit Yadav"))
+        try context.save()
+
+        let terms = try await CaptureStore(modelContainer: stack.container).casedTerms()
+        #expect(Set(terms) == ["Kubernetes", "Sukrit Yadav"])
+    }
+
     @Test("a fired rule is counted against whichever kind it was")
     func rewritesAreCountedByKind() async throws {
         let stack = try DataStack.inMemory()

@@ -9,6 +9,16 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Dictation fits the text around the cursor. Mid-sentence it arrives with a
+  space in front and a lower-case first word — "I think that's fine.", not
+  "I thinkThat's fine." — and without a full stop when the sentence carries on
+  past the cursor. "I", acronyms, your custom words, snippet expansions and
+  names the field already capitalises keep their capitals, and a selection is
+  replaced without doubled spaces. Done by fixed rules, not the cleanup model,
+  using a little of the text either side of the cursor read at key-down; it is
+  never stored or logged. Skipped — the text pastes as before — for password
+  fields, apps that don't expose their text, a cursor that moved during a
+  hands-free take, or with "Use what's on screen" off.
 - Paste Last Transcript: `⌃⌘V`, or the menu bar item, pastes the most recent
   dictation again into whatever has focus — for a paste that went somewhere
   unexpected or only reached the clipboard. Kept in memory only, and the tap

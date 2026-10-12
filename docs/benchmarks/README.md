@@ -129,9 +129,10 @@ git.
    couldn't run.
 
 Compare against a baseline only from the same machine, configuration and
-fixture set. Within one run, a clip's warm times spread 15–25% from min to max
-(`latency.md`, Noise). Compare medians, and treat a difference under ~10% on a
-single clip as noise.
+fixture set, and preferably from a run made back to back in the same session.
+Medians drifted 6–13% between two runs of identical code an hour apart
+(`latency.md`, Noise). Treat a difference under ~15% on a single clip, or ~10%
+on the **All** row, as noise.
 
 ## Environment variables
 

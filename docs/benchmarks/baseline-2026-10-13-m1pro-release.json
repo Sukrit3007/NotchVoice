@@ -1,0 +1,1048 @@
+{
+  "cleanup" : "app uses none · Apple Intelligence unavailable (notReady) · local model not installed",
+  "commit" : "5551353",
+  "configuration" : "Release",
+  "date" : "2026-10-12T20:19:39Z",
+  "fixtures" : [
+    {
+      "audioSeconds" : 2.139125,
+      "cold" : {
+        "appCleanupMs" : 0,
+        "cleanup" : [
+
+        ],
+        "final" : "Sounds good. See you at lunch.",
+        "fitMs" : 0.062916,
+        "raw" : "Sounds good. See you at lunch.",
+        "totalMs" : 972.7987079999999,
+        "transcribeMs" : 972.735792
+      },
+      "expected" : "Sounds good, see you at lunch.",
+      "id" : "chat-short",
+      "stable" : true,
+      "terms" : [
+
+      ],
+      "verbatim" : "Sounds good, see you at lunch.",
+      "warm" : [
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Sounds good. See you at lunch.",
+          "fitMs" : 0.020083,
+          "raw" : "Sounds good. See you at lunch.",
+          "totalMs" : 817.091875,
+          "transcribeMs" : 817.071792
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Sounds good. See you at lunch.",
+          "fitMs" : 0.021125,
+          "raw" : "Sounds good. See you at lunch.",
+          "totalMs" : 767.424792,
+          "transcribeMs" : 767.403667
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Sounds good. See you at lunch.",
+          "fitMs" : 0.013792,
+          "raw" : "Sounds good. See you at lunch.",
+          "totalMs" : 793.8145,
+          "transcribeMs" : 793.800708
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Sounds good. See you at lunch.",
+          "fitMs" : 0.0145,
+          "raw" : "Sounds good. See you at lunch.",
+          "totalMs" : 770.879416,
+          "transcribeMs" : 770.864916
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Sounds good. See you at lunch.",
+          "fitMs" : 0.012208,
+          "raw" : "Sounds good. See you at lunch.",
+          "totalMs" : 790.672041,
+          "transcribeMs" : 790.659833
+        }
+      ],
+      "warmMedian" : {
+        "appCleanupMs" : 0,
+        "fitMs" : 0.0145,
+        "totalMs" : 790.672041,
+        "transcribeMs" : 790.659833
+      },
+      "werFinal" : {
+        "errors" : 0,
+        "rate" : 0,
+        "words" : 6
+      },
+      "werRaw" : {
+        "errors" : 0,
+        "rate" : 0,
+        "words" : 6
+      }
+    },
+    {
+      "audioSeconds" : 2.21725,
+      "cold" : {
+        "appCleanupMs" : 0,
+        "cleanup" : [
+
+        ],
+        "final" : "Can you send me the deck before the call?",
+        "fitMs" : 0.00675,
+        "raw" : "Can you send me the deck before the call?",
+        "totalMs" : 799.582042,
+        "transcribeMs" : 799.575292
+      },
+      "expected" : "Can you send me the deck before the call?",
+      "id" : "chat-question",
+      "stable" : true,
+      "terms" : [
+
+      ],
+      "verbatim" : "Can you send me the deck before the call?",
+      "warm" : [
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Can you send me the deck before the call?",
+          "fitMs" : 0.005083,
+          "raw" : "Can you send me the deck before the call?",
+          "totalMs" : 763.5064160000001,
+          "transcribeMs" : 763.501333
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Can you send me the deck before the call?",
+          "fitMs" : 0.006417,
+          "raw" : "Can you send me the deck before the call?",
+          "totalMs" : 754.7220840000001,
+          "transcribeMs" : 754.715667
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Can you send me the deck before the call?",
+          "fitMs" : 0.005916,
+          "raw" : "Can you send me the deck before the call?",
+          "totalMs" : 780.823041,
+          "transcribeMs" : 780.817125
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Can you send me the deck before the call?",
+          "fitMs" : 0.0065,
+          "raw" : "Can you send me the deck before the call?",
+          "totalMs" : 788.7495409999999,
+          "transcribeMs" : 788.743041
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Can you send me the deck before the call?",
+          "fitMs" : 0.004917,
+          "raw" : "Can you send me the deck before the call?",
+          "totalMs" : 759.136792,
+          "transcribeMs" : 759.131875
+        }
+      ],
+      "warmMedian" : {
+        "appCleanupMs" : 0,
+        "fitMs" : 0.005916,
+        "totalMs" : 763.5064160000001,
+        "transcribeMs" : 763.501333
+      },
+      "werFinal" : {
+        "errors" : 0,
+        "rate" : 0,
+        "words" : 9
+      },
+      "werRaw" : {
+        "errors" : 0,
+        "rate" : 0,
+        "words" : 9
+      }
+    },
+    {
+      "audioSeconds" : 4.0906875,
+      "cold" : {
+        "appCleanupMs" : 0,
+        "cleanup" : [
+
+        ],
+        "final" : "Let's meet at 5, actually 6, in the main conference room.",
+        "fitMs" : 0.027542,
+        "raw" : "Let's meet at 5, actually 6, in the main conference room.",
+        "totalMs" : 867.764458,
+        "transcribeMs" : 867.736916
+      },
+      "expected" : "Let's meet at 6 in the main conference room.",
+      "id" : "self-correction",
+      "stable" : true,
+      "terms" : [
+
+      ],
+      "verbatim" : "Let's meet at 5, actually 6, in the main conference room.",
+      "warm" : [
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Let's meet at 5, actually 6, in the main conference room.",
+          "fitMs" : 0.036459,
+          "raw" : "Let's meet at 5, actually 6, in the main conference room.",
+          "totalMs" : 848.7152090000001,
+          "transcribeMs" : 848.67875
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Let's meet at 5, actually 6, in the main conference room.",
+          "fitMs" : 0.02675,
+          "raw" : "Let's meet at 5, actually 6, in the main conference room.",
+          "totalMs" : 854.08475,
+          "transcribeMs" : 854.058
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Let's meet at 5, actually 6, in the main conference room.",
+          "fitMs" : 0.0235,
+          "raw" : "Let's meet at 5, actually 6, in the main conference room.",
+          "totalMs" : 834.152875,
+          "transcribeMs" : 834.129375
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Let's meet at 5, actually 6, in the main conference room.",
+          "fitMs" : 0.025,
+          "raw" : "Let's meet at 5, actually 6, in the main conference room.",
+          "totalMs" : 835.327,
+          "transcribeMs" : 835.302
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Let's meet at 5, actually 6, in the main conference room.",
+          "fitMs" : 0.027667,
+          "raw" : "Let's meet at 5, actually 6, in the main conference room.",
+          "totalMs" : 853.304042,
+          "transcribeMs" : 853.276375
+        }
+      ],
+      "warmMedian" : {
+        "appCleanupMs" : 0,
+        "fitMs" : 0.02675,
+        "totalMs" : 848.7152090000001,
+        "transcribeMs" : 848.67875
+      },
+      "werFinal" : {
+        "errors" : 2,
+        "rate" : 0.2222222222222222,
+        "words" : 9
+      },
+      "werRaw" : {
+        "errors" : 0,
+        "rate" : 0,
+        "words" : 11
+      }
+    },
+    {
+      "audioSeconds" : 3.838625,
+      "cold" : {
+        "appCleanupMs" : 0,
+        "cleanup" : [
+
+        ],
+        "final" : "Rename the function to fetchUserProfile and add a unit test for it.",
+        "fitMs" : 0.017875,
+        "raw" : "Rename the function to fetchUserProfile and add a unit test for it.",
+        "totalMs" : 1019.546542,
+        "transcribeMs" : 1019.528667
+      },
+      "expected" : "Rename the function to fetchUserProfile and add a unit test for it.",
+      "id" : "code-term",
+      "stable" : true,
+      "terms" : [
+        "fetchUserProfile"
+      ],
+      "unbiased" : {
+        "medianTranscribeMs" : 900.551042,
+        "raw" : "Rename the function to Fetch User Profile and add a unit test for it.",
+        "runs" : [
+          {
+            "raw" : "Rename the function to Fetch User Profile and add a unit test for it.",
+            "transcribeMs" : 947.36725
+          },
+          {
+            "raw" : "Rename the function to Fetch User Profile and add a unit test for it.",
+            "transcribeMs" : 872.701333
+          },
+          {
+            "raw" : "Rename the function to Fetch User Profile and add a unit test for it.",
+            "transcribeMs" : 970.161583
+          },
+          {
+            "raw" : "Rename the function to Fetch User Profile and add a unit test for it.",
+            "transcribeMs" : 900.551042
+          },
+          {
+            "raw" : "Rename the function to Fetch User Profile and add a unit test for it.",
+            "transcribeMs" : 896.212667
+          }
+        ],
+        "werRaw" : {
+          "errors" : 3,
+          "rate" : 0.25,
+          "words" : 12
+        }
+      },
+      "verbatim" : "Rename the function to fetchUserProfile and add a unit test for it.",
+      "warm" : [
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Rename the function to fetchUserProfile and add a unit test for it.",
+          "fitMs" : 0.027709,
+          "raw" : "Rename the function to fetchUserProfile and add a unit test for it.",
+          "totalMs" : 965.096334,
+          "transcribeMs" : 965.068625
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Rename the function to fetchUserProfile and add a unit test for it.",
+          "fitMs" : 0.050541,
+          "raw" : "Rename the function to fetchUserProfile and add a unit test for it.",
+          "totalMs" : 982.342625,
+          "transcribeMs" : 982.292084
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Rename the function to fetchUserProfile and add a unit test for it.",
+          "fitMs" : 0.021625,
+          "raw" : "Rename the function to fetchUserProfile and add a unit test for it.",
+          "totalMs" : 1020.4661249999999,
+          "transcribeMs" : 1020.4445
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Rename the function to fetchUserProfile and add a unit test for it.",
+          "fitMs" : 0.018,
+          "raw" : "Rename the function to fetchUserProfile and add a unit test for it.",
+          "totalMs" : 976.411292,
+          "transcribeMs" : 976.393292
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Rename the function to fetchUserProfile and add a unit test for it.",
+          "fitMs" : 0.02125,
+          "raw" : "Rename the function to fetchUserProfile and add a unit test for it.",
+          "totalMs" : 990.185792,
+          "transcribeMs" : 990.164542
+        }
+      ],
+      "warmMedian" : {
+        "appCleanupMs" : 0,
+        "fitMs" : 0.021625,
+        "totalMs" : 982.342625,
+        "transcribeMs" : 982.292084
+      },
+      "werFinal" : {
+        "errors" : 0,
+        "rate" : 0,
+        "words" : 12
+      },
+      "werRaw" : {
+        "errors" : 0,
+        "rate" : 0,
+        "words" : 12
+      }
+    },
+    {
+      "audioSeconds" : 4.758125,
+      "cold" : {
+        "appCleanupMs" : 0,
+        "cleanup" : [
+
+        ],
+        "final" : "please send the signed contract to priya.sharma at example.com by Friday.",
+        "fitMs" : 0.020417,
+        "raw" : "please send the signed contract to priya.sharma at example.com by Friday.",
+        "totalMs" : 907.7060419999999,
+        "transcribeMs" : 907.685625
+      },
+      "expected" : "Please send the signed contract to priya.sharma@example.com by Friday.",
+      "id" : "email",
+      "stable" : true,
+      "terms" : [
+
+      ],
+      "verbatim" : "Please send the signed contract to priya.sharma@example.com by Friday.",
+      "warm" : [
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "please send the signed contract to priya.sharma at example.com by Friday.",
+          "fitMs" : 0.026042,
+          "raw" : "please send the signed contract to priya.sharma at example.com by Friday.",
+          "totalMs" : 879.035251,
+          "transcribeMs" : 879.009209
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "please send the signed contract to priya.sharma at example.com by Friday.",
+          "fitMs" : 0.025916,
+          "raw" : "please send the signed contract to priya.sharma at example.com by Friday.",
+          "totalMs" : 877.0959160000001,
+          "transcribeMs" : 877.07
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "please send the signed contract to priya.sharma at example.com by Friday.",
+          "fitMs" : 0.022833,
+          "raw" : "please send the signed contract to priya.sharma at example.com by Friday.",
+          "totalMs" : 915.105583,
+          "transcribeMs" : 915.08275
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "please send the signed contract to priya.sharma at example.com by Friday.",
+          "fitMs" : 0.016292,
+          "raw" : "please send the signed contract to priya.sharma at example.com by Friday.",
+          "totalMs" : 901.564917,
+          "transcribeMs" : 901.548625
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "please send the signed contract to priya.sharma at example.com by Friday.",
+          "fitMs" : 0.024333,
+          "raw" : "please send the signed contract to priya.sharma at example.com by Friday.",
+          "totalMs" : 883.662417,
+          "transcribeMs" : 883.638084
+        }
+      ],
+      "warmMedian" : {
+        "appCleanupMs" : 0,
+        "fitMs" : 0.024333,
+        "totalMs" : 883.662417,
+        "transcribeMs" : 883.638084
+      },
+      "werFinal" : {
+        "errors" : 3,
+        "rate" : 0.3333333333333333,
+        "words" : 9
+      },
+      "werRaw" : {
+        "errors" : 3,
+        "rate" : 0.3333333333333333,
+        "words" : 9
+      }
+    },
+    {
+      "audioSeconds" : 5.6971875,
+      "cold" : {
+        "appCleanupMs" : 0,
+        "cleanup" : [
+
+        ],
+        "final" : "Ask Priya to share the Propsoch dashboard with Arjun, then push the NotchVoice build to TestFlight.",
+        "fitMs" : 0.028375,
+        "raw" : "Ask Priya to share the Propsoch dashboard with Arjun, then push the NotchVoice build to TestFlight.",
+        "totalMs" : 1280.718667,
+        "transcribeMs" : 1280.690292
+      },
+      "expected" : "Ask Priya to share the Propsoch dashboard with Arjun, then push the NotchVoice build to TestFlight.",
+      "id" : "names",
+      "stable" : true,
+      "terms" : [
+        "Priya",
+        "Propsoch",
+        "Arjun",
+        "NotchVoice",
+        "TestFlight"
+      ],
+      "unbiased" : {
+        "medianTranscribeMs" : 1013.299166,
+        "raw" : "Ask Priya to share the Propsoch dashboard with Arjun, then push the Notch voice build to test flight.",
+        "runs" : [
+          {
+            "raw" : "Ask Priya to share the Propsoch dashboard with Arjun, then push the Notch voice build to test flight.",
+            "transcribeMs" : 1013.299166
+          },
+          {
+            "raw" : "Ask Priya to share the Propsoch dashboard with Arjun, then push the Notch voice build to test flight.",
+            "transcribeMs" : 988.151167
+          },
+          {
+            "raw" : "Ask Priya to share the Propsoch dashboard with Arjun, then push the Notch voice build to test flight.",
+            "transcribeMs" : 1065.893375
+          },
+          {
+            "raw" : "Ask Priya to share the Propsoch dashboard with Arjun, then push the Notch voice build to test flight.",
+            "transcribeMs" : 1036.885417
+          },
+          {
+            "raw" : "Ask Priya to share the Propsoch dashboard with Arjun, then push the Notch voice build to test flight.",
+            "transcribeMs" : 991.631167
+          }
+        ],
+        "werRaw" : {
+          "errors" : 4,
+          "rate" : 0.25,
+          "words" : 16
+        }
+      },
+      "verbatim" : "Ask Priya to share the Propsoch dashboard with Arjun, then push the NotchVoice build to TestFlight.",
+      "warm" : [
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Ask Priya to share the Propsoch dashboard with Arjun, then push the NotchVoice build to TestFlight.",
+          "fitMs" : 0.030166,
+          "raw" : "Ask Priya to share the Propsoch dashboard with Arjun, then push the NotchVoice build to TestFlight.",
+          "totalMs" : 1267.856874,
+          "transcribeMs" : 1267.826708
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Ask Priya to share the Propsoch dashboard with Arjun, then push the NotchVoice build to TestFlight.",
+          "fitMs" : 0.028042,
+          "raw" : "Ask Priya to share the Propsoch dashboard with Arjun, then push the NotchVoice build to TestFlight.",
+          "totalMs" : 1269.763542,
+          "transcribeMs" : 1269.7355
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Ask Priya to share the Propsoch dashboard with Arjun, then push the NotchVoice build to TestFlight.",
+          "fitMs" : 0.032917,
+          "raw" : "Ask Priya to share the Propsoch dashboard with Arjun, then push the NotchVoice build to TestFlight.",
+          "totalMs" : 1290.570917,
+          "transcribeMs" : 1290.538
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Ask Priya to share the Propsoch dashboard with Arjun, then push the NotchVoice build to TestFlight.",
+          "fitMs" : 0.021833,
+          "raw" : "Ask Priya to share the Propsoch dashboard with Arjun, then push the NotchVoice build to TestFlight.",
+          "totalMs" : 1260.921374,
+          "transcribeMs" : 1260.899541
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Ask Priya to share the Propsoch dashboard with Arjun, then push the NotchVoice build to TestFlight.",
+          "fitMs" : 0.026333,
+          "raw" : "Ask Priya to share the Propsoch dashboard with Arjun, then push the NotchVoice build to TestFlight.",
+          "totalMs" : 1250.274166,
+          "transcribeMs" : 1250.247833
+        }
+      ],
+      "warmMedian" : {
+        "appCleanupMs" : 0,
+        "fitMs" : 0.028042,
+        "totalMs" : 1267.856874,
+        "transcribeMs" : 1267.826708
+      },
+      "werFinal" : {
+        "errors" : 0,
+        "rate" : 0,
+        "words" : 16
+      },
+      "werRaw" : {
+        "errors" : 0,
+        "rate" : 0,
+        "words" : 16
+      }
+    },
+    {
+      "audioSeconds" : 6.7413125,
+      "cold" : {
+        "appCleanupMs" : 0,
+        "cleanup" : [
+
+        ],
+        "final" : "Here is my list for tomorrow. Buy milk. Call the bank. Renew my passport. And book the flight to Bangalore.",
+        "fitMs" : 0.023209,
+        "raw" : "Here is my list for tomorrow. Buy milk. Call the bank. Renew my passport. And book the flight to Bangalore.",
+        "totalMs" : 1073.710167,
+        "transcribeMs" : 1073.686958
+      },
+      "expected" : "Here is my list for tomorrow: buy milk, call the bank, renew my passport, and book the flight to Bangalore.",
+      "id" : "list",
+      "stable" : true,
+      "terms" : [
+
+      ],
+      "verbatim" : "Here is my list for tomorrow: buy milk, call the bank, renew my passport, and book the flight to Bangalore.",
+      "warm" : [
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Here is my list for tomorrow. Buy milk. Call the bank. Renew my passport. And book the flight to Bangalore.",
+          "fitMs" : 0.082667,
+          "raw" : "Here is my list for tomorrow. Buy milk. Call the bank. Renew my passport. And book the flight to Bangalore.",
+          "totalMs" : 1054.209167,
+          "transcribeMs" : 1054.1265
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Here is my list for tomorrow. Buy milk. Call the bank. Renew my passport. And book the flight to Bangalore.",
+          "fitMs" : 0.019917,
+          "raw" : "Here is my list for tomorrow. Buy milk. Call the bank. Renew my passport. And book the flight to Bangalore.",
+          "totalMs" : 1025.865459,
+          "transcribeMs" : 1025.845542
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Here is my list for tomorrow. Buy milk. Call the bank. Renew my passport. And book the flight to Bangalore.",
+          "fitMs" : 0.031791,
+          "raw" : "Here is my list for tomorrow. Buy milk. Call the bank. Renew my passport. And book the flight to Bangalore.",
+          "totalMs" : 1048.8020410000001,
+          "transcribeMs" : 1048.77025
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Here is my list for tomorrow. Buy milk. Call the bank. Renew my passport. And book the flight to Bangalore.",
+          "fitMs" : 0.024667,
+          "raw" : "Here is my list for tomorrow. Buy milk. Call the bank. Renew my passport. And book the flight to Bangalore.",
+          "totalMs" : 1058.6785,
+          "transcribeMs" : 1058.653833
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Here is my list for tomorrow. Buy milk. Call the bank. Renew my passport. And book the flight to Bangalore.",
+          "fitMs" : 0.033458,
+          "raw" : "Here is my list for tomorrow. Buy milk. Call the bank. Renew my passport. And book the flight to Bangalore.",
+          "totalMs" : 1088.169083,
+          "transcribeMs" : 1088.135625
+        }
+      ],
+      "warmMedian" : {
+        "appCleanupMs" : 0,
+        "fitMs" : 0.031791,
+        "totalMs" : 1054.209167,
+        "transcribeMs" : 1054.1265
+      },
+      "werFinal" : {
+        "errors" : 0,
+        "rate" : 0,
+        "words" : 20
+      },
+      "werRaw" : {
+        "errors" : 0,
+        "rate" : 0,
+        "words" : 20
+      }
+    },
+    {
+      "audioSeconds" : 9.0659375,
+      "cold" : {
+        "appCleanupMs" : 0,
+        "cleanup" : [
+
+        ],
+        "final" : "The invoice for three seats comes to $1,250 after a 15% discount, and it is due by 3.30pm on March 14th.",
+        "fitMs" : 0.024625,
+        "raw" : "The invoice for three seats comes to $1,250 after a 15% discount, and it is due by 3.30pm on March 14th.",
+        "totalMs" : 1110.003292,
+        "transcribeMs" : 1109.978667
+      },
+      "expected" : "The invoice for 3 seats comes to $1,250 after a 15% discount, and it is due by 3:30 p.m. on March 14.",
+      "id" : "numbers",
+      "stable" : true,
+      "terms" : [
+
+      ],
+      "verbatim" : "The invoice for 3 seats comes to $1,250 after a 15% discount, and it is due by 3:30 p.m. on March 14.",
+      "warm" : [
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "The invoice for three seats comes to $1,250 after a 15% discount, and it is due by 3.30pm on March 14th.",
+          "fitMs" : 0.037542,
+          "raw" : "The invoice for three seats comes to $1,250 after a 15% discount, and it is due by 3.30pm on March 14th.",
+          "totalMs" : 1099.766292,
+          "transcribeMs" : 1099.72875
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "The invoice for three seats comes to $1,250 after a 15% discount, and it is due by 3.30pm on March 14th.",
+          "fitMs" : 0.023292,
+          "raw" : "The invoice for three seats comes to $1,250 after a 15% discount, and it is due by 3.30pm on March 14th.",
+          "totalMs" : 1078.6563760000001,
+          "transcribeMs" : 1078.633084
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "The invoice for three seats comes to $1,250 after a 15% discount, and it is due by 3.30pm on March 14th.",
+          "fitMs" : 0.069083,
+          "raw" : "The invoice for three seats comes to $1,250 after a 15% discount, and it is due by 3.30pm on March 14th.",
+          "totalMs" : 1085.7690830000001,
+          "transcribeMs" : 1085.7
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "The invoice for three seats comes to $1,250 after a 15% discount, and it is due by 3.30pm on March 14th.",
+          "fitMs" : 0.029958,
+          "raw" : "The invoice for three seats comes to $1,250 after a 15% discount, and it is due by 3.30pm on March 14th.",
+          "totalMs" : 1093.8139580000002,
+          "transcribeMs" : 1093.784
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "The invoice for three seats comes to $1,250 after a 15% discount, and it is due by 3.30pm on March 14th.",
+          "fitMs" : 0.034416,
+          "raw" : "The invoice for three seats comes to $1,250 after a 15% discount, and it is due by 3.30pm on March 14th.",
+          "totalMs" : 1235.2008329999999,
+          "transcribeMs" : 1235.166417
+        }
+      ],
+      "warmMedian" : {
+        "appCleanupMs" : 0,
+        "fitMs" : 0.034416,
+        "totalMs" : 1093.8139580000002,
+        "transcribeMs" : 1093.784
+      },
+      "werFinal" : {
+        "errors" : 2,
+        "rate" : 0.08695652173913043,
+        "words" : 23
+      },
+      "werRaw" : {
+        "errors" : 2,
+        "rate" : 0.08695652173913043,
+        "words" : 23
+      }
+    },
+    {
+      "audioSeconds" : 11.466875,
+      "cold" : {
+        "appCleanupMs" : 0,
+        "cleanup" : [
+
+        ],
+        "final" : "Hi team. Quick update on the release. The build passed every test this morning, and I have sent it to the beta group. If nothing serious comes up by Wednesday, we will ship it to everyone on Thursday.",
+        "fitMs" : 0.030375,
+        "raw" : "Hi team. Quick update on the release. The build passed every test this morning, and I have sent it to the beta group. If nothing serious comes up by Wednesday, we will ship it to everyone on Thursday.",
+        "totalMs" : 1269.915375,
+        "transcribeMs" : 1269.885
+      },
+      "expected" : "Hi team, quick update on the release. The build passed every test this morning, and I have sent it to the beta group. If nothing serious comes up by Wednesday, we will ship it to everyone on Thursday.",
+      "id" : "update-medium",
+      "stable" : true,
+      "terms" : [
+
+      ],
+      "verbatim" : "Hi team, quick update on the release. The build passed every test this morning, and I have sent it to the beta group. If nothing serious comes up by Wednesday, we will ship it to everyone on Thursday.",
+      "warm" : [
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Hi team. Quick update on the release. The build passed every test this morning, and I have sent it to the beta group. If nothing serious comes up by Wednesday, we will ship it to everyone on Thursday.",
+          "fitMs" : 0.040833,
+          "raw" : "Hi team. Quick update on the release. The build passed every test this morning, and I have sent it to the beta group. If nothing serious comes up by Wednesday, we will ship it to everyone on Thursday.",
+          "totalMs" : 1262.107624,
+          "transcribeMs" : 1262.066791
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Hi team. Quick update on the release. The build passed every test this morning, and I have sent it to the beta group. If nothing serious comes up by Wednesday, we will ship it to everyone on Thursday.",
+          "fitMs" : 0.03125,
+          "raw" : "Hi team. Quick update on the release. The build passed every test this morning, and I have sent it to the beta group. If nothing serious comes up by Wednesday, we will ship it to everyone on Thursday.",
+          "totalMs" : 1276.483584,
+          "transcribeMs" : 1276.452334
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Hi team. Quick update on the release. The build passed every test this morning, and I have sent it to the beta group. If nothing serious comes up by Wednesday, we will ship it to everyone on Thursday.",
+          "fitMs" : 0.058292,
+          "raw" : "Hi team. Quick update on the release. The build passed every test this morning, and I have sent it to the beta group. If nothing serious comes up by Wednesday, we will ship it to everyone on Thursday.",
+          "totalMs" : 1320.062083,
+          "transcribeMs" : 1320.003791
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Hi team. Quick update on the release. The build passed every test this morning, and I have sent it to the beta group. If nothing serious comes up by Wednesday, we will ship it to everyone on Thursday.",
+          "fitMs" : 0.032084,
+          "raw" : "Hi team. Quick update on the release. The build passed every test this morning, and I have sent it to the beta group. If nothing serious comes up by Wednesday, we will ship it to everyone on Thursday.",
+          "totalMs" : 1315.108084,
+          "transcribeMs" : 1315.076
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "Hi team. Quick update on the release. The build passed every test this morning, and I have sent it to the beta group. If nothing serious comes up by Wednesday, we will ship it to everyone on Thursday.",
+          "fitMs" : 0.039083,
+          "raw" : "Hi team. Quick update on the release. The build passed every test this morning, and I have sent it to the beta group. If nothing serious comes up by Wednesday, we will ship it to everyone on Thursday.",
+          "totalMs" : 1335.4708329999999,
+          "transcribeMs" : 1335.43175
+        }
+      ],
+      "warmMedian" : {
+        "appCleanupMs" : 0,
+        "fitMs" : 0.039083,
+        "totalMs" : 1315.108084,
+        "transcribeMs" : 1315.076
+      },
+      "werFinal" : {
+        "errors" : 0,
+        "rate" : 0,
+        "words" : 38
+      },
+      "werRaw" : {
+        "errors" : 0,
+        "rate" : 0,
+        "words" : 38
+      }
+    },
+    {
+      "audioSeconds" : 27.1123125,
+      "cold" : {
+        "appCleanupMs" : 0,
+        "cleanup" : [
+
+        ],
+        "final" : "The new onboarding flow is nearly ready, but I want to tidy a few things before we ship it. The permissions screen still asks for accessibility before it explains why, which feels backwards. The model download takes too long on a slow connection, so we should show its size up front. And I would like one more pass on the copy, because several sentences are longer than they need to be. Once that is done, I will record a short video for the release notes and send it round for feedback.",
+        "fitMs" : 0.062833,
+        "raw" : "The new onboarding flow is nearly ready, but I want to tidy a few things before we ship it. The permissions screen still asks for accessibility before it explains why, which feels backwards. The model download takes too long on a slow connection, so we should show its size up front. And I would like one more pass on the copy, because several sentences are longer than they need to be. Once that is done, I will record a short video for the release notes and send it round for feedback.",
+        "totalMs" : 2206.729958,
+        "transcribeMs" : 2206.667125
+      },
+      "expected" : "The new onboarding flow is nearly ready, but I want to tidy a few things before we ship it. The permissions screen still asks for accessibility before it explains why, which feels backwards. The model download takes too long on a slow connection, so we should show its size up front. And I would like one more pass on the copy, because several sentences are longer than they need to be. Once that is done, I will record a short video for the release notes and send it round for feedback.",
+      "id" : "paragraph-long",
+      "stable" : true,
+      "terms" : [
+
+      ],
+      "verbatim" : "The new onboarding flow is nearly ready, but I want to tidy a few things before we ship it. The permissions screen still asks for accessibility before it explains why, which feels backwards. The model download takes too long on a slow connection, so we should show its size up front. And I would like one more pass on the copy, because several sentences are longer than they need to be. Once that is done, I will record a short video for the release notes and send it round for feedback.",
+      "warm" : [
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "The new onboarding flow is nearly ready, but I want to tidy a few things before we ship it. The permissions screen still asks for accessibility before it explains why, which feels backwards. The model download takes too long on a slow connection, so we should show its size up front. And I would like one more pass on the copy, because several sentences are longer than they need to be. Once that is done, I will record a short video for the release notes and send it round for feedback.",
+          "fitMs" : 0.070583,
+          "raw" : "The new onboarding flow is nearly ready, but I want to tidy a few things before we ship it. The permissions screen still asks for accessibility before it explains why, which feels backwards. The model download takes too long on a slow connection, so we should show its size up front. And I would like one more pass on the copy, because several sentences are longer than they need to be. Once that is done, I will record a short video for the release notes and send it round for feedback.",
+          "totalMs" : 2101.3650000000002,
+          "transcribeMs" : 2101.294417
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "The new onboarding flow is nearly ready, but I want to tidy a few things before we ship it. The permissions screen still asks for accessibility before it explains why, which feels backwards. The model download takes too long on a slow connection, so we should show its size up front. And I would like one more pass on the copy, because several sentences are longer than they need to be. Once that is done, I will record a short video for the release notes and send it round for feedback.",
+          "fitMs" : 0.324292,
+          "raw" : "The new onboarding flow is nearly ready, but I want to tidy a few things before we ship it. The permissions screen still asks for accessibility before it explains why, which feels backwards. The model download takes too long on a slow connection, so we should show its size up front. And I would like one more pass on the copy, because several sentences are longer than they need to be. Once that is done, I will record a short video for the release notes and send it round for feedback.",
+          "totalMs" : 2283.9353749999996,
+          "transcribeMs" : 2283.611083
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "The new onboarding flow is nearly ready, but I want to tidy a few things before we ship it. The permissions screen still asks for accessibility before it explains why, which feels backwards. The model download takes too long on a slow connection, so we should show its size up front. And I would like one more pass on the copy, because several sentences are longer than they need to be. Once that is done, I will record a short video for the release notes and send it round for feedback.",
+          "fitMs" : 0.100792,
+          "raw" : "The new onboarding flow is nearly ready, but I want to tidy a few things before we ship it. The permissions screen still asks for accessibility before it explains why, which feels backwards. The model download takes too long on a slow connection, so we should show its size up front. And I would like one more pass on the copy, because several sentences are longer than they need to be. Once that is done, I will record a short video for the release notes and send it round for feedback.",
+          "totalMs" : 2147.367917,
+          "transcribeMs" : 2147.267125
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "The new onboarding flow is nearly ready, but I want to tidy a few things before we ship it. The permissions screen still asks for accessibility before it explains why, which feels backwards. The model download takes too long on a slow connection, so we should show its size up front. And I would like one more pass on the copy, because several sentences are longer than they need to be. Once that is done, I will record a short video for the release notes and send it round for feedback.",
+          "fitMs" : 0.068875,
+          "raw" : "The new onboarding flow is nearly ready, but I want to tidy a few things before we ship it. The permissions screen still asks for accessibility before it explains why, which feels backwards. The model download takes too long on a slow connection, so we should show its size up front. And I would like one more pass on the copy, because several sentences are longer than they need to be. Once that is done, I will record a short video for the release notes and send it round for feedback.",
+          "totalMs" : 2277.609834,
+          "transcribeMs" : 2277.540959
+        },
+        {
+          "appCleanupMs" : 0,
+          "cleanup" : [
+
+          ],
+          "final" : "The new onboarding flow is nearly ready, but I want to tidy a few things before we ship it. The permissions screen still asks for accessibility before it explains why, which feels backwards. The model download takes too long on a slow connection, so we should show its size up front. And I would like one more pass on the copy, because several sentences are longer than they need to be. Once that is done, I will record a short video for the release notes and send it round for feedback.",
+          "fitMs" : 0.07025,
+          "raw" : "The new onboarding flow is nearly ready, but I want to tidy a few things before we ship it. The permissions screen still asks for accessibility before it explains why, which feels backwards. The model download takes too long on a slow connection, so we should show its size up front. And I would like one more pass on the copy, because several sentences are longer than they need to be. Once that is done, I will record a short video for the release notes and send it round for feedback.",
+          "totalMs" : 2166.3027500000003,
+          "transcribeMs" : 2166.2325
+        }
+      ],
+      "warmMedian" : {
+        "appCleanupMs" : 0,
+        "fitMs" : 0.070583,
+        "totalMs" : 2166.3027500000003,
+        "transcribeMs" : 2166.2325
+      },
+      "werFinal" : {
+        "errors" : 0,
+        "rate" : 0,
+        "words" : 91
+      },
+      "werRaw" : {
+        "errors" : 0,
+        "rate" : 0,
+        "words" : 91
+      }
+    }
+  ],
+  "language" : "en",
+  "machine" : {
+    "chip" : "Apple M1 Pro",
+    "memoryGB" : 16,
+    "model" : "MacBookPro18,3",
+    "os" : "27.0.0 (26A5425a)"
+  },
+  "modelLoadMs" : 4840.075584,
+  "speechModel" : "openai_whisper-large-v3-v20240930_turbo_632MB",
+  "summary" : {
+    "audioSeconds" : 77.1274375,
+    "firstDictationMs" : 972.7987079999999,
+    "werFinal" : {
+      "errors" : 7,
+      "rate" : 0.030042918454935622,
+      "words" : 233
+    },
+    "werRaw" : {
+      "errors" : 5,
+      "rate" : 0.02127659574468085,
+      "words" : 235
+    },
+    "werRawWithTerms" : {
+      "errors" : 0,
+      "rate" : 0,
+      "words" : 28
+    },
+    "werRawWithoutTerms" : {
+      "errors" : 7,
+      "rate" : 0.25,
+      "words" : 28
+    }
+  },
+  "warmRuns" : 5
+}

@@ -39,11 +39,11 @@ public enum TranscriptRewriter {
     }
 
     /// - Parameter acrossPunctuation: match a rule's words even where the
-    ///   text has punctuation, a dash or a line break between them, not only
-    ///   the spaces the rule has. For snippets, which run on cleaned-up text:
-    ///   cleanup turns "best regards sukrit" into "Best regards, Sukrit." and
-    ///   the trigger must still be found. Corrections run on the raw
-    ///   transcript and match exactly.
+    ///   text has a comma or a dash between them, not only the spaces the
+    ///   rule has. For snippets, which run on cleaned-up text: cleanup turns
+    ///   "best regards sukrit" into "Best regards, Sukrit." and the trigger
+    ///   must still be found. Corrections run on the raw transcript and match
+    ///   exactly.
     public static func apply(
         _ rules: [Rule], to text: String, acrossPunctuation: Bool = false
     ) -> Result {
@@ -117,20 +117,43 @@ public enum TranscriptRewriter {
         return true
     }
 
-    /// What cleanup may put between two spoken words.
-    private static func isSeparator(_ character: Character) -> Bool {
-        character.isWhitespace || ",.;:!?-–—".contains(character)
+    /// What cleanup may put between two words of one phrase: spaces, a comma,
+    /// a dash. Never a sentence end or a line break — "my. Address" and a
+    /// list item per word are two phrases, not one trigger.
+    private static func isGap(_ character: Character) -> Bool {
+        (character.isWhitespace && !character.isNewline) || ",-–—".contains(character)
     }
 
-    /// A rule's words, or nil when it has none to match loosely — all
-    /// punctuation, say — and must be matched as written.
-    private static func words(of match: String) -> [[Character]]? {
-        let words = match.split(whereSeparator: isSeparator).map(Array.init)
-        return words.isEmpty ? nil : words
+    /// A rule as literal pieces, split only at gaps *between* its words:
+    /// "best regards, sukrit" → best | regards | sukrit. Punctuation at either
+    /// end stays on the piece it touches and is required, so ":shrug:" and
+    /// "--sig" still need their marks — that is what keeps them from firing on
+    /// the plain word.
+    private static func words(of match: String) -> [[Character]] {
+        let characters = Array(match)
+        guard let first = characters.firstIndex(where: { !isGap($0) }),
+              let last = characters.lastIndex(where: { !isGap($0) })
+        else { return [characters] }
+
+        var pieces: [[Character]] = []
+        var piece = Array(characters[..<first])
+        var index = first
+        while index <= last {
+            if isGap(characters[index]) {
+                pieces.append(piece)
+                piece = []
+                while isGap(characters[index]) { index += 1 }
+            } else {
+                piece.append(characters[index])
+                index += 1
+            }
+        }
+        pieces.append(piece + characters[(last + 1)...])
+        return pieces
     }
 
     /// How many characters at `start` spell `words` in order, with at least
-    /// one separator between each pair, or nil if they don't.
+    /// one gap between each pair, or nil if they don't.
     private static func looseLength(
         of words: [[Character]], in characters: [Character], at start: Int
     ) -> Int? {
@@ -138,7 +161,7 @@ public enum TranscriptRewriter {
         for (position, word) in words.enumerated() {
             if position > 0 {
                 let gap = index
-                while index < characters.count, isSeparator(characters[index]) { index += 1 }
+                while index < characters.count, isGap(characters[index]) { index += 1 }
                 guard index > gap else { return nil }
             }
             guard index + word.count <= characters.count,

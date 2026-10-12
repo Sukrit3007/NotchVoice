@@ -139,18 +139,45 @@ struct TranscriptRewriterTests {
             to: text, acrossPunctuation: true)
     }
 
-    @Test("a trigger is found across the punctuation, case and breaks cleanup adds",
+    @Test("a trigger is found across the commas, dashes and case cleanup adds",
           arguments: [
             "Best regards, Sukrit.",
             "best regards sukrit",
-            "Best regards,\nSukrit",
             "Best regards — Sukrit!",
-            "Best regards; sukrit?",
+            "Best-regards,  Sukrit",
           ])
     func triggerAcrossPunctuation(_ text: String) {
         let result = expand(text, [("best regards sukrit", "SIGNATURE")])
         #expect(result.applied == ["best regards sukrit"])
         #expect(result.text.hasPrefix("SIGNATURE"))
+    }
+
+    @Test("a trigger never spans a sentence end or a line break",
+          arguments: [
+            "That is my. Address the letter to Sam.",
+            "Is it my? Address unknown.",
+            "Call me\n\n- My\n- Address book",
+            "my\naddress",
+            "my; address",
+          ])
+    func triggerStopsAtBoundaries(_ text: String) {
+        let result = expand(text, [("my address", "221B Baker St")])
+        #expect(!result.didChange)
+        #expect(result.text == text)
+    }
+
+    @Test("a trigger's own punctuation at its edges is still required")
+    func edgePunctuationIsRequired() {
+        // Typed prefixes and wrappers exist to stop accidental expansion.
+        let rules = [(":shrug:", "¯\\_(ツ)_/¯"), ("--sig", "Sukrit"), ("addr,", "221B")]
+        #expect(!expand("I shrug it off", rules).didChange)
+        #expect(!expand("my sig here", rules).didChange)
+        #expect(!expand("the addr is", rules).didChange)
+        #expect(expand("ok :shrug: fine", rules).text == "ok ¯\\_(ツ)_/¯ fine")
+        #expect(expand("--sig", rules).text == "Sukrit")
+        #expect(expand("my addr, please", rules).text == "my 221B please")
+        // Only the gap between words is loose.
+        #expect(expand("say --sig, now", [("--sig now", "X")]).text == "say X")
     }
 
     @Test("punctuation after the trigger is left in place")

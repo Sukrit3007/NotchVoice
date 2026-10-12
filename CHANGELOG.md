@@ -94,10 +94,12 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   told apart from a real denial in Console.
 - Snippets expand after cleanup instead of before it, so an address, a sign-off
   or a link arrives exactly as you wrote it rather than tidied like speech. A
-  trigger still matches when cleanup has put commas, full stops, dashes or a
-  line break between its words — "best regards sukrit" is found in "Best
-  regards, Sukrit." Dictionary corrections still run first, and still match
-  exactly, so cleanup works on the right words.
+  trigger still matches when cleanup has put a comma or a dash between its
+  words — "best regards sukrit" is found in "Best regards, Sukrit." — but never
+  across a sentence end or a line break, and punctuation that is part of the
+  trigger itself (":shrug:", "--sig") is still required. Dictionary
+  corrections still run first, and still match exactly, so cleanup works on
+  the right words.
 
 ### Removed
 

@@ -2,6 +2,7 @@ import AVFoundation
 import AppKit
 import ApplicationServices
 import IOKit.hid   // IOHIDCheckAccess — Input Monitoring status
+import Security
 
 struct PermissionStatus: Equatable {
     let microphone: Bool
@@ -125,5 +126,26 @@ enum PermissionChecker {
 
     static func requestMicrophone() async -> Bool {
         await AVCaptureDevice.requestAccess(for: .audio)
+    }
+
+    /// The designated requirement this build is signed with, for the log line
+    /// next to a permission failure.
+    ///
+    /// TCC keys every grant to it. A build signed by a different identity shows
+    /// as granted in System Settings and is refused anyway — the "granted but
+    /// broken" state that is otherwise very hard to tell apart from a real
+    /// denial. See `docs/versioning.md` for the requirement releases must keep.
+    static func signingRequirement() -> String {
+        var code: SecCode?
+        var staticCode: SecStaticCode?
+        var requirement: SecRequirement?
+        var text: CFString?
+        guard SecCodeCopySelf([], &code) == errSecSuccess, let code,
+              SecCodeCopyStaticCode(code, [], &staticCode) == errSecSuccess, let staticCode,
+              SecCodeCopyDesignatedRequirement(staticCode, [], &requirement) == errSecSuccess,
+              let requirement,
+              SecRequirementCopyString(requirement, [], &text) == errSecSuccess, let text
+        else { return "unavailable" }
+        return text as String
     }
 }

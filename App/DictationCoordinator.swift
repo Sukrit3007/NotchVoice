@@ -238,6 +238,8 @@ final class DictationCoordinator {
 
         guard tap.start() else {
             Log.input.error("Tap did NOT arm — Accessibility or Input Monitoring is missing")
+            Log.input.error(
+                "Signed as: \(PermissionChecker.signingRequirement(), privacy: .public)")
             readiness = .needsPermission
             return false
         }

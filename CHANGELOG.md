@@ -73,6 +73,10 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - App Nap no longer throttles the app while it waits for the dictation key. It
   holds a user-initiated activity for its lifetime, which still lets the Mac
   sleep when idle. After wake, the event tap is checked straight away.
+- When the hotkey cannot arm, the log records the designated requirement the
+  app is signed with. Permission grants are keyed to it, so a build signed by a
+  different identity — granted in System Settings, refused anyway — can now be
+  told apart from a real denial in Console.
 
 ### Removed
 

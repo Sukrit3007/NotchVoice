@@ -58,6 +58,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Emoji cannot carry a badge the way `waveform.badge.exclamationmark` did, so the
   whole glyph swaps instead — the always-visible warning survives, by a different
   mechanism.
+- App Nap no longer throttles the app while it waits for the dictation key. It
+  holds a user-initiated activity for its lifetime, which still lets the Mac
+  sleep when idle. After wake, the event tap is checked straight away.
 
 ### Removed
 

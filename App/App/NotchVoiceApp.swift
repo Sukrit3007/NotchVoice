@@ -12,6 +12,8 @@ final class NotchVoiceApp: NSObject, NSApplicationDelegate {
     @MainActor private var onboarding: OnboardingWindowController?
     /// Held for the process. Releasing it stops Sparkle checking, silently.
     @MainActor private var updates: UpdateController?
+    /// Held for the process too. Ending it hands the app back to App Nap.
+    @MainActor private var activity: (any NSObjectProtocol)?
 
     /// Starts the pipeline and surfaces anything still missing.
     ///
@@ -102,6 +104,15 @@ final class NotchVoiceApp: NSObject, NSApplicationDelegate {
         // on the main thread, and hopping would leave a window in which the app
         // is up with no tap armed.
         MainActor.assumeIsolated {
+            // An accessory app with no visible window is exactly what App Nap
+            // throttles — timers coalesced, priority lowered — and this one has
+            // to answer a key press at any moment, with the tap watchdog and
+            // the island's timers running on time. Idle *system* sleep stays
+            // allowed: this keeps the app responsive, not the Mac awake.
+            self.activity = ProcessInfo.processInfo.beginActivity(
+                options: .userInitiatedAllowingIdleSystemSleep,
+                reason: "Waiting for the dictation key")
+
             let coordinator = DictationCoordinator()
             let island = IslandWindowController(coordinator: coordinator)
 
